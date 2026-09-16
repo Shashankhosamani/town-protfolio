@@ -1,0 +1,1296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Shashank — Portfolio Town (Prototype)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<style>
+  :root{
+    --bg: #0c0f18;
+    --accent: #ffcf8a;
+    --blue: #4da6ff;
+    --amber: #ffb84d;
+    --pink: #ff6b9d;
+    --violet: #a685ff;
+    --ink: #f3f0ea;
+    --ink-dim: #9aa0b0;
+    --panel-bg: rgba(12, 14, 22, 0.93);
+    --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Consolas, monospace;
+    --sans: 'Inter', -apple-system, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  *{ box-sizing: border-box; }
+
+  html, body{
+    margin:0; padding:0; width:100%; height:100%;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    overflow: hidden;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  #canvas-wrap{ position:fixed; inset:0; }
+  canvas{ display:block; touch-action:none; }
+
+  /* ---------- Intro ---------- */
+  #intro{
+    position:fixed; inset:0; z-index:50;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    background: radial-gradient(ellipse at center, #14182a 0%, #08090f 70%);
+    text-align:center; padding: 24px;
+  }
+  #intro .kicker{
+    font-family: var(--mono); font-size: 13px; letter-spacing: 0.04em;
+    color: var(--accent); margin-bottom: 18px;
+  }
+  #intro h1{
+    font-size: clamp(28px, 6vw, 52px); font-weight: 700; line-height: 1.08;
+    margin: 0 0 14px 0; max-width: 14ch;
+  }
+  #intro p{
+    color: var(--ink-dim); max-width: 46ch; line-height: 1.5; margin: 0 0 30px 0;
+    font-size: 15px;
+  }
+  #start-btn{
+    font-family: var(--mono); font-size: 14px; font-weight: 500;
+    background: var(--accent); color: #241706; border: none;
+    padding: 14px 30px; border-radius: 4px; cursor: pointer;
+    box-shadow: 0 0 24px rgba(255,207,138,0.3);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  #start-btn:hover{ transform: translateY(-1px); box-shadow: 0 0 32px rgba(255,207,138,0.45); }
+  #start-btn:focus-visible{ outline: 2px solid var(--ink); outline-offset: 3px; }
+  #intro .controls-hint{
+    margin-top: 26px; font-family: var(--mono); font-size: 12px; color: var(--ink-dim);
+    display:flex; gap: 18px; flex-wrap: wrap; justify-content:center;
+  }
+  #intro .controls-hint span{ white-space:nowrap; }
+  #intro .controls-hint kbd{
+    border: 1px solid #2c3244; border-radius: 3px; padding: 1px 6px;
+    font-family: var(--mono); color: var(--ink);
+  }
+
+  /* ---------- HUD ---------- */
+  #hud{ position:fixed; inset:0; pointer-events:none; z-index:20; opacity:0; transition: opacity 0.4s ease; }
+  #hud.active{ opacity:1; }
+
+  #hud-top-left{
+    position:absolute; top:16px; left:16px; font-family: var(--mono);
+    font-size: 12px; color: var(--ink-dim); line-height:1.6;
+  }
+  #hud-top-left .brand{ color: var(--ink); font-weight:600; letter-spacing: 0.02em; }
+
+  #minimap-wrap{
+    position:absolute; top:16px; right:16px; width: 136px; height: 110px;
+    background: rgba(10,12,20,0.7); border: 1px solid #262c3c; border-radius: 6px;
+    overflow:hidden;
+  }
+  #minimap{ width:100%; height:100%; display:block; }
+
+  #speed-readout{
+    position:absolute; bottom:18px; left:18px; font-family: var(--mono);
+    font-size: 12px; color: var(--ink-dim);
+  }
+  #speed-readout b{ color: var(--accent); font-size: 20px; font-weight: 700; }
+
+  #station-prompt{
+    position:absolute; bottom: 90px; left:50%; transform: translateX(-50%) translateY(8px);
+    font-family: var(--mono); font-size: 13px; color: var(--ink);
+    background: rgba(10,12,20,0.88); border: 1px solid #2c3244; border-radius: 5px;
+    padding: 8px 16px; opacity:0; transition: opacity 0.2s ease, transform 0.2s ease;
+    pointer-events: none; white-space: nowrap;
+  }
+  #station-prompt.show{ opacity:1; transform: translateX(-50%) translateY(0); }
+  #station-prompt kbd{
+    border: 1px solid #3a4258; border-radius: 3px; padding: 1px 6px; margin-right: 6px;
+    color: var(--accent);
+  }
+
+  /* ---------- Touch controls ---------- */
+  #touch-controls{
+    position:absolute; inset:0; display:none; pointer-events:none;
+  }
+  #touch-controls.active{ display:block; }
+  .tbtn{
+    position:absolute; pointer-events:auto; width: 64px; height:64px; border-radius: 50%;
+    background: rgba(20,24,36,0.55); border: 1px solid #2c3244; color: var(--ink);
+    display:flex; align-items:center; justify-content:center; font-size: 22px;
+    -webkit-user-select:none; user-select:none;
+  }
+  .tbtn:active{ background: rgba(255,207,138,0.22); border-color: var(--accent); }
+  #btn-left{ bottom: 24px; left: 20px; }
+  #btn-right{ bottom: 24px; left: 96px; }
+  #btn-accel{ bottom: 96px; right: 20px; }
+  #btn-brake{ bottom: 24px; right: 20px; }
+  #btn-interact{
+    bottom: 168px; right: 20px; width: 56px; height:56px;
+    background: rgba(255,207,138,0.16); border-color: var(--accent); font-size: 12px;
+    font-family: var(--mono);
+  }
+
+  /* ---------- Station Panel ---------- */
+  #panel-overlay{
+    position:fixed; inset:0; z-index:40; display:flex; align-items:flex-end;
+    background: rgba(4,5,9,0); pointer-events:none;
+    transition: background 0.25s ease;
+  }
+  #panel-overlay.open{ background: rgba(4,5,9,0.6); pointer-events:auto; }
+
+  #panel{
+    width:100%; max-height: 62vh; background: var(--panel-bg);
+    border-top: 1px solid #2c3244; border-radius: 16px 16px 0 0;
+    padding: 28px 28px 32px 28px; transform: translateY(120vh);
+    transition: transform 0.3s cubic-bezier(.2,.8,.2,1);
+    overflow-y: auto; backdrop-filter: blur(6px);
+  }
+  #panel-overlay.open #panel{ transform: translateY(0); }
+
+  @media (min-width: 720px){
+    #panel{ max-width: 620px; margin: 0 auto 40px auto; border-radius: 16px; max-height: 56vh; }
+    #panel-overlay{ align-items:center; }
+  }
+
+  #panel .eyebrow{
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.03em;
+    margin-bottom: 6px;
+  }
+  #panel h2{ margin: 0 0 14px 0; font-size: 24px; font-weight: 700; }
+  #panel .body-copy{ color: var(--ink-dim); line-height:1.6; font-size: 14px; }
+  #panel .body-copy p{ margin: 0 0 12px 0; }
+  #panel ul{ margin: 0 0 12px 0; padding-left: 18px; }
+  #panel li{ margin-bottom: 6px; }
+  #panel-close{
+    position:absolute; top:18px; right:18px; background:none; border:none;
+    color: var(--ink-dim); font-size: 22px; cursor:pointer; line-height:1;
+    width: 32px; height:32px; border-radius:50%;
+  }
+  #panel-close:hover{ color: var(--ink); background: rgba(255,255,255,0.06); }
+  #panel-close:focus-visible{ outline: 2px solid var(--accent); }
+
+  @media (prefers-reduced-motion: reduce){
+    #panel, #panel-overlay, #station-prompt, #hud{ transition: none !important; }
+  }
+
+  #fatal-error{
+    position:fixed; top:0; left:0; right:0; z-index:100;
+    background:#3a0d0d; color:#ffd7d7; font-family:'JetBrains Mono',monospace;
+    font-size:12px; line-height:1.5; padding:12px 16px; display:none;
+    white-space:pre-wrap; border-bottom:1px solid #ff6b6b;
+  }
+</style>
+</head>
+<body>
+
+<div id="fatal-error"></div>
+<div id="canvas-wrap"></div>
+
+<div id="intro">
+  <div class="kicker">// portfolio prototype</div>
+  <h1>Drive through the town.</h1>
+  <p>A town square at dusk, with a road out to each of four separate cities — Projects, Skills, Experience, Contact — each with its own palette, streetlights, and shopfront. Drag the mouse to look around while you drive.</p>
+  <button id="start-btn">Start Engine</button>
+  <div class="controls-hint">
+    <span><kbd>W/↑</kbd> accelerate</span>
+    <span><kbd>S/↓</kbd> brake</span>
+    <span><kbd>A D</kbd> steer</span>
+    <span><kbd>E</kbd> interact</span>
+    <span>drag mouse to look around</span>
+  </div>
+</div>
+
+<div id="hud">
+  <div id="hud-top-left">
+    <div class="brand">SHASHANK.DEV</div>
+    <div>prototype build — placeholder assets</div>
+  </div>
+
+  <div id="minimap-wrap"><canvas id="minimap" width="136" height="110"></canvas></div>
+
+  <div id="speed-readout"><b id="speed-val">0</b> km/h</div>
+
+  <div id="station-prompt"><kbd>E</kbd><span id="station-prompt-text">Explore Projects</span></div>
+
+  <div id="touch-controls">
+    <div class="tbtn" id="btn-left">◀</div>
+    <div class="tbtn" id="btn-right">▶</div>
+    <div class="tbtn" id="btn-accel">▲</div>
+    <div class="tbtn" id="btn-brake">▼</div>
+    <div class="tbtn" id="btn-interact">EXPLORE</div>
+  </div>
+</div>
+
+<div id="panel-overlay">
+  <div id="panel" role="dialog" aria-modal="true" aria-labelledby="panel-title">
+    <button id="panel-close" aria-label="Close">✕</button>
+    <div class="eyebrow" id="panel-eyebrow">STATION</div>
+    <h2 id="panel-title">Title</h2>
+    <div class="body-copy" id="panel-body"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  function showFatalError(msg){
+    var el = document.getElementById('fatal-error');
+    el.textContent = 'Something went wrong: ' + msg + '\n(Open devtools console for the full trace.)';
+    el.style.display = 'block';
+    var startBtn = document.getElementById('start-btn');
+    if (startBtn){ startBtn.textContent = 'Start Engine'; startBtn.disabled = false; }
+  }
+  window.addEventListener('error', function(e){
+    showFatalError(e.message || 'unknown error');
+  });
+
+  // ---------------------------------------------------------------
+  // Station content (placeholder — swap for real copy/links later)
+  // ---------------------------------------------------------------
+  var STATION_CONTENT = {
+    projects: {
+      eyebrow: "STOP 01 — PROJECTS", color: "#4da6ff",
+      title: "Things I've built",
+      html:
+        '<p>Placeholder entries — replace with real project cards, screenshots, and links.</p>' +
+        '<ul>' +
+        '<li><strong>AgentRealm</strong> — platform for always-on AI agents with a goal → check-in → feedback loop.</li>' +
+        '<li><strong>Costiq</strong> — SMS-based personal expense tracker, extraction + categorization pipeline.</li>' +
+        '<li><em>[ next project ]</em> — one line on what it does and why it matters.</li>' +
+        '</ul>'
+    },
+    skills: {
+      eyebrow: "STOP 02 — SKILLS", color: "#ffb84d",
+      title: "Stack",
+      html:
+        '<p>Placeholder — swap for a real tag grid or icon row.</p>' +
+        '<ul>' +
+        '<li>Web: Next.js, React</li>' +
+        '<li>Backend: Cloudflare Workers, Supabase</li>' +
+        '<li>Mobile: Android / Kotlin</li>' +
+        '<li>AI: agent infrastructure, tool-use systems</li>' +
+        '</ul>'
+    },
+    experience: {
+      eyebrow: "STOP 03 — EXPERIENCE", color: "#ff6b9d",
+      title: "Where I've worked",
+      html:
+        '<p>Placeholder timeline — swap for real roles and dates.</p>' +
+        '<ul>' +
+        '<li><strong>OneCap</strong> — Software Engineer, building AI agents for ledger reconciliation.</li>' +
+        '<li><em>[ earlier role ]</em> — one line on scope/impact.</li>' +
+        '</ul>'
+    },
+    contact: {
+      eyebrow: "STOP 04 — CONTACT", color: "#a685ff",
+      title: "Get in touch",
+      html:
+        '<p>Placeholder — wire these to real links.</p>' +
+        '<ul>' +
+        '<li>Email — you@example.com</li>' +
+        '<li>GitHub — github.com/yourhandle</li>' +
+        '<li>LinkedIn — linkedin.com/in/yourhandle</li>' +
+        '</ul>'
+    }
+  };
+
+  // ---------------------------------------------------------------
+  // Real 3D assets (GLTF), fetched in parallel with the intro screen
+  // so they're usually ready before Start is even clicked. Every use
+  // below degrades gracefully to the old procedural version if an
+  // asset fails to load — e.g. this file was opened directly as
+  // file:// instead of served over http://, which blocks the fetch.
+  // ---------------------------------------------------------------
+  var ASSETS = { road: null, car: null, trafficLight: null };
+  var PREFABS = {};
+  var assetsSettled = false;
+
+  function findByPrefix(root, prefix){
+    var found = null;
+    root.traverse(function(obj){
+      if (!found && obj.name && obj.name.indexOf(prefix) === 0) found = obj;
+    });
+    return found;
+  }
+
+  // Wrap a piece so its own local origin sits at its horizontal
+  // center with its bottom resting on y=0 — makes it drop-in
+  // placeable by position/rotation alone, like our procedural pieces.
+  function makeGroundedPrefab(piece){
+    if (!piece) return null;
+    var raw = piece.clone(true);
+    raw.position.set(0,0,0);
+    raw.quaternion.identity();
+    raw.updateMatrixWorld(true);
+    var box = new THREE.Box3().setFromObject(raw);
+    var size = box.getSize(new THREE.Vector3());
+    var center = box.getCenter(new THREE.Vector3());
+    raw.position.x -= center.x;
+    raw.position.z -= center.z;
+    raw.position.y -= box.min.y;
+    var pivot = new THREE.Group();
+    pivot.add(raw);
+    pivot.userData.size = size;
+    return pivot;
+  }
+
+  function buildPrefabs(){
+    if (ASSETS.road){
+      PREFABS.road = makeGroundedPrefab(findByPrefix(ASSETS.road, 'Road_'));
+      PREFABS.lightPole = makeGroundedPrefab(findByPrefix(ASSETS.road, 'Light pole_'));
+      // a straight road piece may have been authored running along
+      // local X or Z — normalize so "forward" is always +Z, matching
+      // every tangent/rotation calc elsewhere in this file.
+      if (PREFABS.road && PREFABS.road.userData.size.x > PREFABS.road.userData.size.z){
+        PREFABS.road.children[0].rotation.y = Math.PI/2;
+        var sz = PREFABS.road.userData.size;
+        PREFABS.road.userData.size = new THREE.Vector3(sz.z, sz.y, sz.x);
+      }
+    }
+    assetsSettled = true;
+  }
+
+  function loadAssets(){
+    var loader;
+    try {
+      loader = new THREE.GLTFLoader();
+    } catch(e){
+      console.warn('[assets] GLTFLoader unavailable — using procedural fallback everywhere.', e);
+      assetsSettled = true;
+      return;
+    }
+    var jobs = [
+      { key:'road', url: 'road_modular/scene.web.gltf' },
+      { key:'car', url: 'dodge_challenger_-_muscle_car_-_low-poly/scene.web.gltf' },
+      { key:'trafficLight', url: 'australian_traffic_light__pedestrain_light/scene.web.gltf' }
+    ];
+    var remaining = jobs.length;
+    function done(){ remaining--; if (remaining <= 0) buildPrefabs(); }
+    jobs.forEach(function(job){
+      loader.load(job.url, function(gltf){
+        ASSETS[job.key] = gltf.scene;
+        done();
+      }, undefined, function(err){
+        console.warn('[assets] ' + job.key + ' failed to load — falling back to procedural. ' +
+          'If you opened this file directly, serve it over http:// instead (e.g. `python -m http.server`).', err);
+        done();
+      });
+    });
+  }
+  loadAssets();
+
+  // ---------------------------------------------------------------
+  // Cheap, immediate setup: renderer / scene / camera / lights /
+  // ground. Kept small on purpose so it can't be what breaks Start.
+  // ---------------------------------------------------------------
+  var wrap = document.getElementById('canvas-wrap');
+  var scene = new THREE.Scene();
+  var SKY_COLOR = 0x141826;
+  scene.background = new THREE.Color(SKY_COLOR);
+  scene.fog = new THREE.FogExp2(SKY_COLOR, 0.006);
+
+  var camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 700);
+  camera.position.set(0, 8, -20);
+
+  var renderer;
+  try {
+    renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      powerPreference: 'high-performance',
+      failIfMajorPerformanceCaveat: false
+    });
+  } catch(e){
+    renderer = new THREE.WebGLRenderer({ antialias:false, failIfMajorPerformanceCaveat:false });
+  }
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.shadowMap.enabled = true;
+  renderer.domElement.style.cursor = 'grab';
+  wrap.appendChild(renderer.domElement);
+
+  window.addEventListener('resize', function(){
+    camera.aspect = window.innerWidth/window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  scene.add(new THREE.AmbientLight(0x30405a, 1.0));
+  var sun = new THREE.DirectionalLight(0xffb37a, 0.55);
+  sun.position.set(-60, 40, -28);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(1024,1024);
+  sun.shadow.camera.left = -100; sun.shadow.camera.right = 100;
+  sun.shadow.camera.top = 100; sun.shadow.camera.bottom = -100;
+  scene.add(sun);
+
+  function makeGroundTexture(){
+    var size = 512;
+    var c = document.createElement('canvas');
+    c.width = c.height = size;
+    var ctx = c.getContext('2d');
+    ctx.fillStyle = '#20261c';
+    ctx.fillRect(0,0,size,size);
+    for (var i=0;i<2200;i++){
+      ctx.fillStyle = 'rgba(255,255,255,' + (Math.random()*0.035) + ')';
+      ctx.fillRect(Math.random()*size, Math.random()*size, 2, 2);
+    }
+    var tex = new THREE.CanvasTexture(c);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(38,38);
+    return tex;
+  }
+
+  var ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(600,600),
+    new THREE.MeshStandardMaterial({ map: makeGroundTexture(), roughness:1 })
+  );
+  ground.rotation.x = -Math.PI/2;
+  ground.receiveShadow = true;
+  scene.add(ground);
+
+  renderer.render(scene, camera);
+
+  // ---------------------------------------------------------------
+  // Mouse / touch drag to look around. Works immediately (doesn't
+  // depend on the car existing yet); spring-back happens in
+  // updateCamera once the world is running.
+  // ---------------------------------------------------------------
+  var isDragging = false, lastPX = 0, lastPY = 0;
+  var lookYaw = 0, lookPitch = 0;
+  var LOOK_SENS = 0.006;
+  var PITCH_MIN = -0.45, PITCH_MAX = 0.55;
+
+  renderer.domElement.addEventListener('pointerdown', function(e){
+    isDragging = true; lastPX = e.clientX; lastPY = e.clientY;
+    renderer.domElement.style.cursor = 'grabbing';
+    try { renderer.domElement.setPointerCapture(e.pointerId); } catch(err){}
+  });
+  renderer.domElement.addEventListener('pointermove', function(e){
+    if (!isDragging) return;
+    var dx = e.clientX - lastPX, dy = e.clientY - lastPY;
+    lastPX = e.clientX; lastPY = e.clientY;
+    lookYaw -= dx * LOOK_SENS;
+    lookPitch = Math.max(PITCH_MIN, Math.min(PITCH_MAX, lookPitch - dy * LOOK_SENS));
+  });
+  function endDrag(){ isDragging = false; renderer.domElement.style.cursor = 'grab'; }
+  renderer.domElement.addEventListener('pointerup', endDrag);
+  renderer.domElement.addEventListener('pointercancel', endDrag);
+  renderer.domElement.addEventListener('pointerleave', endDrag);
+
+  // ---------------------------------------------------------------
+  // Everything below is built lazily, on Start click, so a slow or
+  // failing build can't block the button itself from responding.
+  // ---------------------------------------------------------------
+  var roads = [];           // [{ key, centerPts, normals, closed }]
+  var allPts = [], allNormals = [];  // merged, for boundary collision
+  var stationMeshes = [], car, input, controlsLocked = false;
+  var ROAD_HALF, CURB_WIDTH, SIDEWALK_WIDTH, STREET_EDGE, SIDEWALK_OUTER, CAR_HALF;
+  var speed = 0, MAX_SPEED, ACCEL, BRAKE, FRICTION, TURN_RATE, BOUND_LIMIT;
+  var camOffset, camTarget, forwardVec;
+  var mmCanvas, mmCtx, MM_SCALE;
+  var promptEl, promptTextEl, nearestStation = null;
+  var panelOverlay, panelEyebrow, panelTitle, panelBody;
+  var clock, running = false;
+
+  function computeNormals(pts, closed){
+    var out = [];
+    for (var i=0;i<pts.length;i++){
+      var prev, next;
+      if (closed){
+        prev = pts[(i-1+pts.length)%pts.length];
+        next = pts[(i+1)%pts.length];
+      } else {
+        prev = pts[Math.max(0,i-1)];
+        next = pts[Math.min(pts.length-1,i+1)];
+      }
+      var tangent = next.clone().sub(prev).normalize();
+      out.push(new THREE.Vector3(-tangent.z, 0, tangent.x).normalize());
+    }
+    return out;
+  }
+
+  function buildFlatRibbon(centerPts, normals, closed, innerDist, outerDist, y, colorFn){
+    var positions = [], colors = [];
+    var c = new THREE.Color();
+    var segCount = closed ? centerPts.length : centerPts.length - 1;
+    for (var i=0;i<segCount;i++){
+      var i2 = (i+1) % centerPts.length;
+      var p0 = centerPts[i], p1 = centerPts[i2];
+      var n0 = normals[i], n1 = normals[i2];
+      var aIn = new THREE.Vector3().copy(p0).addScaledVector(n0, innerDist); aIn.y = y;
+      var aOut = new THREE.Vector3().copy(p0).addScaledVector(n0, outerDist); aOut.y = y;
+      var bIn = new THREE.Vector3().copy(p1).addScaledVector(n1, innerDist); bIn.y = y;
+      var bOut = new THREE.Vector3().copy(p1).addScaledVector(n1, outerDist); bOut.y = y;
+      c.set(colorFn(i));
+      [aIn,aOut,bOut, aIn,bOut,bIn].forEach(function(v){
+        positions.push(v.x, v.y, v.z);
+        colors.push(c.r, c.g, c.b);
+      });
+    }
+    var geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    geo.computeVertexNormals();
+    return geo;
+  }
+
+  // Cumulative arc length along a point path, for evenly spacing
+  // discrete road-kit tiles over a continuous spline.
+  function arcLengthTable(pts, closed){
+    var cum = [0];
+    for (var i=1;i<pts.length;i++) cum.push(cum[i-1] + pts[i].distanceTo(pts[i-1]));
+    if (closed) cum.push(cum[cum.length-1] + pts[0].distanceTo(pts[pts.length-1]));
+    return cum;
+  }
+
+  function sampleAtArcLength(pts, cum, dist){
+    var n = pts.length;
+    for (var i=1;i<cum.length;i++){
+      if (cum[i] >= dist){
+        var segLen = cum[i] - cum[i-1];
+        var t = segLen > 1e-6 ? (dist - cum[i-1]) / segLen : 0;
+        var a = pts[i-1], b = pts[i % n];
+        var point = a.clone().lerp(b, t);
+        var tangent = b.clone().sub(a).normalize();
+        return { point: point, tangent: tangent };
+      }
+    }
+    var last = pts[n-1], prev = pts[Math.max(0,n-2)];
+    return { point: last.clone(), tangent: last.clone().sub(prev).normalize() };
+  }
+
+  function tileRoadWithKit(road){
+    var pts = road.centerPts;
+    var cum = arcLengthTable(pts, road.closed);
+    var total = cum[cum.length-1];
+    var pieceLen = PREFABS.road.userData.size.z;
+    var n = Math.max(1, Math.round(total / pieceLen));
+    var step = total / n;
+    var widthFix = (ROAD_HALF*2) / PREFABS.road.userData.size.x;
+    for (var s=0; s<n; s++){
+      var res = sampleAtArcLength(pts, cum, (s+0.5)*step);
+      var tile = PREFABS.road.clone(true);
+      tile.position.copy(res.point);
+      tile.position.y = 0.02;
+      tile.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1), res.tangent);
+      tile.scale.set(widthFix, 1, step/pieceLen);
+      scene.add(tile);
+    }
+  }
+
+  function buildRoadSurfaceProcedural(road){
+    var roadGeo = buildFlatRibbon(road.centerPts, road.normals, road.closed, -ROAD_HALF, ROAD_HALF, 0.02, function(){ return '#26262b'; });
+    scene.add(new THREE.Mesh(roadGeo, new THREE.MeshStandardMaterial({ vertexColors:true, roughness:0.95 })));
+
+    var dashGeo = buildFlatRibbon(road.centerPts, road.normals, road.closed, -0.1, 0.1, 0.03, function(i){ return (Math.floor(i/6)%2===0) ? '#e9e6de' : '#26262b'; });
+    scene.add(new THREE.Mesh(dashGeo, new THREE.MeshBasicMaterial({ vertexColors:true })));
+  }
+
+  function buildRoadSurface(road){
+    if (PREFABS.road) tileRoadWithKit(road);
+    else buildRoadSurfaceProcedural(road);
+
+    var curbMat = new THREE.MeshStandardMaterial({ vertexColors:true, roughness:0.8 });
+    scene.add(new THREE.Mesh(buildFlatRibbon(road.centerPts, road.normals, road.closed, ROAD_HALF, STREET_EDGE, 0.035, function(){ return '#c9c4b6'; }), curbMat));
+    scene.add(new THREE.Mesh(buildFlatRibbon(road.centerPts, road.normals, road.closed, -STREET_EDGE, -ROAD_HALF, 0.035, function(){ return '#c9c4b6'; }), curbMat));
+
+    var walkMat = new THREE.MeshStandardMaterial({ vertexColors:true, roughness:0.95 });
+    scene.add(new THREE.Mesh(buildFlatRibbon(road.centerPts, road.normals, road.closed, STREET_EDGE, SIDEWALK_OUTER, 0.03, function(){ return '#8b8879'; }), walkMat));
+    scene.add(new THREE.Mesh(buildFlatRibbon(road.centerPts, road.normals, road.closed, -SIDEWALK_OUTER, -STREET_EDGE, 0.03, function(){ return '#8b8879'; }), walkMat));
+  }
+
+  var buildingTexCache = {};
+  function getBuildingTextures(baseColorHex){
+    if (buildingTexCache[baseColorHex]) return buildingTexCache[baseColorHex];
+    var w=128, h=128;
+    var c1 = document.createElement('canvas'); c1.width=w; c1.height=h;
+    var ctx1 = c1.getContext('2d');
+    ctx1.fillStyle = baseColorHex; ctx1.fillRect(0,0,w,h);
+    var c2 = document.createElement('canvas'); c2.width=w; c2.height=h;
+    var ctx2 = c2.getContext('2d');
+    ctx2.fillStyle = '#000000'; ctx2.fillRect(0,0,w,h);
+    var cols=5, rows=6, cellW=w/cols, cellH=h/rows;
+    for (var r=0;r<rows;r++){
+      for (var col=0;col<cols;col++){
+        if (Math.random() < 0.55){
+          var x = col*cellW + cellW*0.22, y = r*cellH + cellH*0.22;
+          var ww = cellW*0.56, hh = cellH*0.56;
+          ctx1.fillStyle = '#332a1f'; ctx1.fillRect(x,y,ww,hh);
+          var lit = Math.random() < 0.6;
+          ctx2.fillStyle = lit ? '#ffd9a0' : '#0c0c0c';
+          ctx2.fillRect(x,y,ww,hh);
+        }
+      }
+    }
+    var entry = { map: new THREE.CanvasTexture(c1), emissiveMap: new THREE.CanvasTexture(c2) };
+    buildingTexCache[baseColorHex] = entry;
+    return entry;
+  }
+
+  function makeBuildingMaterials(baseColorHex){
+    var tex = getBuildingTextures(baseColorHex);
+    var sideMat = new THREE.MeshStandardMaterial({
+      map: tex.map, emissiveMap: tex.emissiveMap, emissive: 0xffcf8a,
+      emissiveIntensity: 0.85, roughness: 0.85
+    });
+    var roofMat = new THREE.MeshStandardMaterial({ color: 0x201c18, roughness: 0.9 });
+    var baseMat = new THREE.MeshStandardMaterial({ color: 0x120f0c, roughness: 1 });
+    return [sideMat, sideMat, roofMat, baseMat, sideMat, sideMat];
+  }
+
+  var DEFAULT_PALETTE = ['#b5654a','#d9b27c','#6f7f6a','#5a6b8c','#8a5a6b','#c9a15a','#4f5d4a','#9c7a52'];
+
+  function placeBuildingAt(pt, n, tangentAngle, palette){
+    var pal = palette || DEFAULT_PALETTE;
+    var d = 4 + Math.random()*2.4;
+    var offset = SIDEWALK_OUTER + d/2 + 1.2;
+    var pos = pt.clone().addScaledVector(n, offset);
+    // don't place a building if it would land on or inside another
+    // road's footprint (this is what caused buildings "in between"
+    // the roads, especially near the loop/avenue crossings)
+    if (distanceToAnyRoad(pos) < SIDEWALK_OUTER + 1.5) return;
+    var w = 4 + Math.random()*3.4, h = 5 + Math.random()*8;
+    var color = pal[Math.floor(Math.random()*pal.length)];
+    var mesh = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), makeBuildingMaterials(color));
+    mesh.position.set(pos.x, h/2, pos.z);
+    mesh.rotation.y = tangentAngle;
+    mesh.castShadow = true; mesh.receiveShadow = true;
+    scene.add(mesh);
+  }
+
+  function placeStreetlightAt(pt, n, lightColor){
+    var color = lightColor !== undefined ? lightColor : 0xffcf8a;
+    var offset = STREET_EDGE + 0.5;
+    var pos = pt.clone().addScaledVector(n, offset);
+    var lampY;
+    if (PREFABS.lightPole){
+      var pole = PREFABS.lightPole.clone(true);
+      var targetHeight = 3.6;
+      var scaleFactor = targetHeight / PREFABS.lightPole.userData.size.y;
+      pole.scale.setScalar(scaleFactor);
+      pole.position.set(pos.x, 0, pos.z);
+      pole.rotation.y = Math.atan2(n.x, n.z) + Math.PI;
+      pole.castShadow = true;
+      scene.add(pole);
+      lampY = targetHeight * 0.92;
+    } else {
+      var poleMesh = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.08,0.08,3.2,6),
+        new THREE.MeshStandardMaterial({ color:0x2a2a2e, roughness:0.6 })
+      );
+      poleMesh.position.set(pos.x, 1.6, pos.z);
+      poleMesh.castShadow = true;
+      scene.add(poleMesh);
+      lampY = 3.25;
+    }
+    var lamp = new THREE.Mesh(new THREE.SphereGeometry(0.18,8,8), new THREE.MeshBasicMaterial({ color: color }));
+    lamp.position.set(pos.x, lampY, pos.z);
+    scene.add(lamp);
+    var light = new THREE.PointLight(color, 0.8, 13);
+    light.position.copy(lamp.position);
+    scene.add(light);
+  }
+
+  // Populate one road with buildings + streetlights on both sides,
+  // using a given palette + lamp color so each city can look like
+  // its own place. skipStart/skipEnd guard the ends of an open road
+  // so nothing sticks out past where it meets another street;
+  // excludeFn lets callers skip indices near a station.
+  function populateRoad(road, buildStride, lightStride, skipStart, skipEnd, excludeFn, palette, lightColor){
+    var n = road.centerPts.length;
+    var lo = skipStart || 0;
+    var hi = road.closed ? n : n - (skipEnd || 0);
+    for (var i=lo; i<hi; i += buildStride){
+      if (excludeFn && excludeFn(i)) continue;
+      var pt = road.centerPts[i], nrm = road.normals[i];
+      var next = road.centerPts[Math.min(n-1,(i+1)%n)];
+      var prev = road.centerPts[Math.max(0,(i-1+n)%n)];
+      var tang = next.clone().sub(prev).normalize();
+      var rotY = Math.atan2(tang.x, tang.z);
+      placeBuildingAt(pt, nrm, rotY, palette);
+      placeBuildingAt(pt, nrm.clone().negate(), rotY, palette);
+    }
+    for (var j=lo; j<hi; j += lightStride){
+      var pt2 = road.centerPts[j], nrm2 = road.normals[j];
+      placeStreetlightAt(pt2, nrm2, lightColor);
+      placeStreetlightAt(pt2, nrm2.clone().negate(), lightColor);
+    }
+  }
+
+  function makeLabelSprite(text, colorHex){
+    var c = document.createElement('canvas');
+    c.width = 256; c.height = 64;
+    var ctx = c.getContext('2d');
+    ctx.fillStyle = 'rgba(0,0,0,0)'; ctx.fillRect(0,0,256,64);
+    ctx.font = '700 28px JetBrains Mono, monospace';
+    ctx.fillStyle = colorHex;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(text, 128, 32);
+    var tex = new THREE.CanvasTexture(c);
+    var mat = new THREE.SpriteMaterial({ map: tex, transparent:true, depthWrite:false });
+    var sprite = new THREE.Sprite(mat);
+    sprite.scale.set(6.5, 1.6, 1);
+    return sprite;
+  }
+
+  function distanceToAnyRoad(pos){
+    var best = Infinity;
+    for (var i=0;i<allPts.length;i+=4){
+      var d = pos.distanceTo(allPts[i]);
+      if (d < best) best = d;
+    }
+    return best;
+  }
+
+  function makeTree(pos){
+    var trunk = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.15,0.2,1.2,6),
+      new THREE.MeshStandardMaterial({ color:0x4a3323, roughness:1 })
+    );
+    trunk.position.set(pos.x, 0.6, pos.z);
+    trunk.castShadow = true;
+    scene.add(trunk);
+    var leaves = new THREE.Mesh(
+      new THREE.SphereGeometry(1.1,8,8),
+      new THREE.MeshStandardMaterial({ color: Math.random()<0.5 ? 0x3f6b3a : 0x4f7a44, roughness:0.9 })
+    );
+    leaves.position.set(pos.x, 1.7, pos.z);
+    leaves.castShadow = true;
+    scene.add(leaves);
+  }
+
+  function nearestAllIndex(pos){
+    var best = 0, bestDist = Infinity;
+    for (var i=0;i<allPts.length;i+=2){
+      var d = pos.distanceToSquared(allPts[i]);
+      if (d < bestDist){ bestDist = d; best = i; }
+    }
+    return best;
+  }
+
+  function enforceTrackBounds(){
+    var idx = nearestAllIndex(car.position);
+    var p = allPts[idx], n = allNormals[idx];
+    var rel = new THREE.Vector3().subVectors(car.position, p);
+    var lateral = rel.dot(n);
+    if (Math.abs(lateral) > BOUND_LIMIT){
+      var clamped = Math.sign(lateral) * BOUND_LIMIT;
+      var forwardComponent = rel.clone().addScaledVector(n, -lateral);
+      car.position.copy(p).add(forwardComponent).addScaledVector(n, clamped);
+      speed *= 0.45;
+    }
+  }
+
+  function updateCar(dt){
+    if (!controlsLocked){
+      if (input.forward) speed += ACCEL * dt;
+      else if (input.backward) speed -= BRAKE * dt;
+      else {
+        if (speed > 0) speed = Math.max(0, speed - FRICTION*dt);
+        else speed = Math.min(0, speed + FRICTION*dt);
+      }
+      speed = Math.max(-MAX_SPEED*0.5, Math.min(MAX_SPEED, speed));
+      var turnDir = 0;
+      if (input.left) turnDir += 1;
+      if (input.right) turnDir -= 1;
+      var speedRatio = Math.min(1, Math.abs(speed)/MAX_SPEED);
+      car.rotation.y += turnDir * TURN_RATE * dt * (0.35 + 0.65*speedRatio) * (speed < 0 ? -1 : 1);
+    } else {
+      speed = speed > 0 ? Math.max(0, speed - FRICTION*2*dt) : Math.min(0, speed + FRICTION*2*dt);
+    }
+    forwardVec.set(0,0,1).applyQuaternion(car.quaternion);
+    car.position.addScaledVector(forwardVec, speed*dt);
+    enforceTrackBounds();
+    document.getElementById('speed-val').textContent = Math.round(Math.abs(speed) * 6);
+  }
+
+  function updateNearestStation(){
+    var best = null, bestDist = Infinity;
+    stationMeshes.forEach(function(s){
+      var d = car.position.distanceTo(s.position);
+      if (d < s.triggerRadius && d < bestDist){ best = s; bestDist = d; }
+    });
+    nearestStation = best;
+    if (best && !controlsLocked){
+      promptTextEl.textContent = 'Explore ' + best.key.charAt(0).toUpperCase() + best.key.slice(1);
+      promptEl.classList.add('show');
+    } else {
+      promptEl.classList.remove('show');
+    }
+  }
+
+  function tryInteract(){
+    if (controlsLocked || !nearestStation) return;
+    openPanel(nearestStation.key);
+  }
+
+  function openPanel(key){
+    var content = STATION_CONTENT[key];
+    if (!content) return;
+    panelEyebrow.textContent = content.eyebrow;
+    panelEyebrow.style.color = content.color;
+    panelTitle.textContent = content.title;
+    panelBody.innerHTML = content.html;
+    panelOverlay.classList.add('open');
+    controlsLocked = true;
+    input.forward = input.backward = input.left = input.right = false;
+    promptEl.classList.remove('show');
+  }
+  function closePanel(){
+    panelOverlay.classList.remove('open');
+    controlsLocked = false;
+  }
+
+  function updateCamera(dt){
+    if (!isDragging){
+      lookYaw = THREE.MathUtils.lerp(lookYaw, 0, 1 - Math.pow(0.0005, dt));
+      lookPitch = THREE.MathUtils.lerp(lookPitch, 0, 1 - Math.pow(0.0005, dt));
+    }
+    var lookEuler = new THREE.Euler(lookPitch, lookYaw, 0, 'YXZ');
+    var lookQuat = new THREE.Quaternion().setFromEuler(lookEuler);
+    var desired = camOffset.clone()
+      .applyQuaternion(lookQuat)
+      .applyQuaternion(car.quaternion)
+      .add(car.position);
+    camera.position.lerp(desired, 1 - Math.pow(0.001, dt));
+    camTarget.copy(car.position).add(new THREE.Vector3(0,1.2,0));
+    camera.lookAt(camTarget);
+  }
+
+  function drawMinimap(){
+    var w = mmCanvas.width, h = mmCanvas.height;
+    mmCtx.clearRect(0,0,w,h);
+    var cx = w/2, cy = h/2;
+    mmCtx.strokeStyle = 'rgba(255,207,138,0.55)';
+    mmCtx.lineWidth = 1.5;
+    roads.forEach(function(road){
+      mmCtx.beginPath();
+      for (var i=0;i<road.centerPts.length;i++){
+        var mx = cx + road.centerPts[i].x*MM_SCALE*0.62;
+        var mz = cy + road.centerPts[i].z*MM_SCALE*0.62;
+        if (i===0) mmCtx.moveTo(mx,mz); else mmCtx.lineTo(mx,mz);
+      }
+      if (road.closed) mmCtx.closePath();
+      mmCtx.stroke();
+    });
+    stationMeshes.forEach(function(s){
+      var mx = cx + s.position.x*MM_SCALE*0.62;
+      var mz = cy + s.position.z*MM_SCALE*0.62;
+      mmCtx.fillStyle = '#ffffff';
+      mmCtx.beginPath(); mmCtx.arc(mx, mz, 2.5, 0, Math.PI*2); mmCtx.fill();
+    });
+    var px = cx + car.position.x*MM_SCALE*0.62;
+    var pz = cy + car.position.z*MM_SCALE*0.62;
+    mmCtx.save();
+    mmCtx.translate(px,pz);
+    mmCtx.rotate(-car.rotation.y);
+    mmCtx.fillStyle = '#39ff88';
+    mmCtx.beginPath();
+    mmCtx.moveTo(0,-5); mmCtx.lineTo(3.5,4); mmCtx.lineTo(-3.5,4);
+    mmCtx.closePath(); mmCtx.fill();
+    mmCtx.restore();
+  }
+
+  function tick(){
+    requestAnimationFrame(tick);
+    if (!running) return;
+    try {
+      var dt = Math.min(clock.getDelta(), 0.05);
+      updateCar(dt);
+      updateNearestStation();
+      updateCamera(dt);
+      drawMinimap();
+      renderer.render(scene, camera);
+    } catch(e){
+      running = false;
+      showFatalError(e.message || 'render loop error');
+    }
+  }
+  tick();
+
+  function initWorld(){
+    // ---- Town square: a small roundabout hub at the origin, with ----
+    // ---- a road spoking out to each of four separate cities.     ----
+    var HUB_RADIUS = 24, HUB_SEGMENTS = 48;
+    var hubPts = [];
+    for (var hi=0; hi<HUB_SEGMENTS; hi++){
+      var a = (hi/HUB_SEGMENTS) * Math.PI * 2;
+      hubPts.push(new THREE.Vector3(Math.cos(a)*HUB_RADIUS, 0, Math.sin(a)*HUB_RADIUS));
+    }
+    var hubRoad = { key:'hub', centerPts: hubPts, normals: computeNormals(hubPts, true), closed: true };
+
+    function nearestPointIn(pts, guess){
+      var best = pts[0], bestD = Infinity;
+      for (var i=0;i<pts.length;i++){
+        var dd = pts[i].distanceTo(guess);
+        if (dd < bestD){ bestD = dd; best = pts[i]; }
+      }
+      return best.clone();
+    }
+    function nearestPointIndexIn(pts, guess){
+      var best = 0, bestD = Infinity;
+      for (var i=0;i<pts.length;i++){
+        var dd = pts[i].distanceTo(guess);
+        if (dd < bestD){ bestD = dd; best = i; }
+      }
+      return best;
+    }
+
+    // Every city reuses the same rounded-rectangle-with-chicane
+    // footprint the old single town loop used, just scaled down and
+    // recentered — so each one is still a real loop to drive around,
+    // not just a cul-de-sac.
+    function makeCityLoopPoints(center, scale, pointCount){
+      var control = [
+        new THREE.Vector3(-32, 0, -18), new THREE.Vector3(  0, 0, -18), new THREE.Vector3( 30, 0, -18),
+        new THREE.Vector3( 44, 0,  -9), new THREE.Vector3( 44, 0,   9), new THREE.Vector3( 30, 0,  18),
+        new THREE.Vector3( 10, 0,  18), new THREE.Vector3(  5, 0,   8), new THREE.Vector3( -5, 0,   8),
+        new THREE.Vector3(-12, 0,  18), new THREE.Vector3(-32, 0,  18), new THREE.Vector3(-46, 0,   9),
+        new THREE.Vector3(-46, 0,  -9)
+      ].map(function(p){ return p.clone().multiplyScalar(scale).add(center); });
+      var curve = new THREE.CatmullRomCurve3(control, true, 'catmullrom', 0.55);
+      return curve.getSpacedPoints(pointCount);
+    }
+
+    var HUB_PALETTE = ['#5a5850','#6f6c60','#4a4740','#807c6e'];
+    var CITY_DEFS = [
+      { key:"skills",     center: new THREE.Vector3(0,0,-140),  color: 0xffb84d, label:"SKILLS",
+        palette: ['#a3652f','#c98a45','#8a5225','#d9a05c','#6b3d18','#b87a3a'] },
+      { key:"projects",   center: new THREE.Vector3(140,0,0),   color: 0x4da6ff, label:"PROJECTS",
+        palette: ['#3d5a80','#5a7ba0','#2f4761','#6f8db3','#1f3350','#4d6d8f'] },
+      { key:"experience", center: new THREE.Vector3(0,0,140),   color: 0xff6b9d, label:"EXPERIENCE",
+        palette: ['#8a4a63','#a85e7d','#6b3548','#c47a98','#4f2536','#96567a'] },
+      { key:"contact",    center: new THREE.Vector3(-140,0,0),  color: 0xa685ff, label:"CONTACT",
+        palette: ['#5a4a8a','#7060a8','#3f3366','#8f7ac4','#2b2347','#6c5a9e'] }
+    ];
+
+    var spokeRoads = [];
+    CITY_DEFS.forEach(function(cd){
+      var cityPts = makeCityLoopPoints(cd.center, 0.9, 220);
+      cd.road = { key: cd.key + 'Loop', centerPts: cityPts, normals: computeNormals(cityPts, true), closed: true };
+
+      var hubExit = nearestPointIn(hubPts, cd.center);
+      var cityEntry = nearestPointIn(cityPts, new THREE.Vector3(0,0,0));
+      var spokeCurve = new THREE.CatmullRomCurve3([hubExit, cityEntry], false, 'catmullrom', 0.5);
+      var spokePts = spokeCurve.getSpacedPoints(70);
+      spokeRoads.push({ key: cd.key + 'Spoke', centerPts: spokePts, normals: computeNormals(spokePts, false), closed: false });
+    });
+
+    roads = [hubRoad].concat(spokeRoads, CITY_DEFS.map(function(cd){ return cd.road; }));
+    allPts = []; allNormals = [];
+    roads.forEach(function(r){ allPts = allPts.concat(r.centerPts); allNormals = allNormals.concat(r.normals); });
+
+    ROAD_HALF = 6; CURB_WIDTH = 1.0; SIDEWALK_WIDTH = 3;
+    STREET_EDGE = ROAD_HALF + CURB_WIDTH;
+    SIDEWALK_OUTER = STREET_EDGE + SIDEWALK_WIDTH;
+    CAR_HALF = 1.15;
+    MAX_SPEED = 26; ACCEL = 17; BRAKE = 27; FRICTION = 10; TURN_RATE = 2.4;
+    BOUND_LIMIT = STREET_EDGE - CAR_HALF;
+
+    roads.forEach(buildRoadSurface);
+
+    // ---- One station per city, on the far side from the hub so   ----
+    // ---- arriving means actually driving into the place.         ----
+    CITY_DEFS.forEach(function(cd){
+      var cityPts = cd.road.centerPts;
+      var farGuess = cd.center.clone().add(cd.center.clone().normalize().multiplyScalar(1000));
+      var idx = nearestPointIndexIn(cityPts, farGuess);
+      cd.stationIdx = idx;
+      var pt = cityPts[idx], n = cd.road.normals[idx];
+      var pos = pt.clone().add(n.clone().multiplyScalar(SIDEWALK_OUTER + 6));
+
+      var group = new THREE.Group();
+      group.position.copy(pos);
+
+      var shop = new THREE.Mesh(
+        new THREE.BoxGeometry(3.2, 5.2, 3.2),
+        new THREE.MeshStandardMaterial({ color: cd.color, emissive: cd.color, emissiveIntensity: 0.3, roughness:0.5 })
+      );
+      shop.position.y = 2.6;
+      shop.castShadow = true;
+      group.add(shop);
+
+      var awning = new THREE.Mesh(
+        new THREE.BoxGeometry(3.8, 0.3, 1.2),
+        new THREE.MeshStandardMaterial({ color: cd.color, emissive: cd.color, emissiveIntensity:0.6, roughness:0.4 })
+      );
+      awning.position.set(0, 2.7, 1.9);
+      group.add(awning);
+
+      var ring = new THREE.Mesh(
+        new THREE.TorusGeometry(3.6, 0.15, 8, 32),
+        new THREE.MeshBasicMaterial({ color: cd.color })
+      );
+      ring.rotation.x = Math.PI/2;
+      ring.position.y = 0.08;
+      group.add(ring);
+
+      var label = makeLabelSprite(cd.label, '#' + cd.color.toString(16).padStart(6,'0'));
+      label.position.y = 6.3;
+      group.add(label);
+
+      var light = new THREE.PointLight(cd.color, 1.3, 20);
+      light.position.y = 4;
+      group.add(light);
+
+      scene.add(group);
+      stationMeshes.push({ key: cd.key, position: pos, group: group, triggerRadius: 9 });
+    });
+
+    // ---- Buildings + streetlights: neutral around the hub and    ----
+    // ---- along the spokes, themed per city inside each city loop ----
+    populateRoad(hubRoad, 5, 10, 0, 0, null, HUB_PALETTE, 0xffcf8a);
+    spokeRoads.forEach(function(r){ populateRoad(r, 9, 18, 6, 6, null, HUB_PALETTE, 0xffcf8a); });
+    CITY_DEFS.forEach(function(cd){
+      var n = cd.road.centerPts.length;
+      populateRoad(cd.road, 8, 16, 0, 0, function(i){
+        return Math.min(Math.abs(i - cd.stationIdx), n - Math.abs(i - cd.stationIdx)) < 14;
+      }, cd.palette, cd.color);
+
+      // faint tinted ground disc so each city reads as its own place
+      // even from a distance, through the dusk fog
+      var tint = new THREE.Mesh(
+        new THREE.CircleGeometry(85, 32),
+        new THREE.MeshBasicMaterial({ color: cd.color, transparent:true, opacity:0.1, depthWrite:false })
+      );
+      tint.rotation.x = -Math.PI/2;
+      tint.position.set(cd.center.x, 0.015, cd.center.z);
+      scene.add(tint);
+    });
+
+    // ---- Park + fountain, in the town square hub everyone passes through ----
+    var treesPlaced = 0, attempts = 0;
+    while (treesPlaced < 16 && attempts < 500){
+      attempts++;
+      var ringMax = HUB_RADIUS - SIDEWALK_OUTER - 2;
+      var p = new THREE.Vector3((Math.random()-0.5)*2*ringMax, 0, (Math.random()-0.5)*2*ringMax);
+      if (p.length() < ringMax && p.length() > 6){
+        makeTree(p);
+        treesPlaced++;
+      }
+    }
+
+    var fountainCenter = new THREE.Vector3(0,0,0);
+    var plazaBase = new THREE.Mesh(
+      new THREE.CylinderGeometry(4.5,4.5,0.15,24),
+      new THREE.MeshStandardMaterial({ color:0x6a6558, roughness:0.9 })
+    );
+    plazaBase.position.set(fountainCenter.x, 0.08, fountainCenter.z);
+    plazaBase.receiveShadow = true;
+    scene.add(plazaBase);
+
+    var fountainRim = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.6,1.7,0.5,20),
+      new THREE.MeshStandardMaterial({ color:0x8a8474, roughness:0.8 })
+    );
+    fountainRim.position.set(fountainCenter.x, 0.33, fountainCenter.z);
+    fountainRim.castShadow = true;
+    scene.add(fountainRim);
+
+    var fountainWater = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.3,1.3,0.45,20),
+      new THREE.MeshStandardMaterial({ color:0x3a6d8f, emissive:0x1c4a63, emissiveIntensity:0.4, roughness:0.3 })
+    );
+    fountainWater.position.set(fountainCenter.x, 0.4, fountainCenter.z);
+    scene.add(fountainWater);
+
+    var fountainSpout = new THREE.Mesh(
+      new THREE.ConeGeometry(0.25,1.0,10),
+      new THREE.MeshStandardMaterial({ color:0x8a8474, roughness:0.8 })
+    );
+    fountainSpout.position.set(fountainCenter.x, 1.1, fountainCenter.z);
+    scene.add(fountainSpout);
+
+    var fountainLight = new THREE.PointLight(0x8fd6ff, 0.6, 10);
+    fountainLight.position.set(fountainCenter.x, 1.5, fountainCenter.z);
+    scene.add(fountainLight);
+
+    // ---- Traffic light prop, one instance, off to the side of the ----
+    // ---- hub plaza so it decorates without blocking the road.     ----
+    if (ASSETS.trafficLight){
+      var tlModel = ASSETS.trafficLight.clone(true);
+      tlModel.position.set(0,0,0);
+      tlModel.quaternion.identity();
+      tlModel.scale.set(1,1,1);
+      tlModel.updateMatrixWorld(true);
+      var tlBox = new THREE.Box3().setFromObject(tlModel);
+      var tlSize = tlBox.getSize(new THREE.Vector3());
+      var tlCenter = tlBox.getCenter(new THREE.Vector3());
+      var tlScale = 7 / tlSize.y;
+      tlModel.position.x -= tlCenter.x;
+      tlModel.position.z -= tlCenter.z;
+      tlModel.position.y -= tlBox.min.y;
+      tlModel.scale.setScalar(tlScale);
+      tlModel.position.multiplyScalar(tlScale);
+      var tlSpot = hubPts[0].clone().addScaledVector(new THREE.Vector3(hubPts[0].x, 0, hubPts[0].z).normalize(), SIDEWALK_OUTER + 6);
+      tlModel.position.x += tlSpot.x;
+      tlModel.position.z += tlSpot.z;
+      tlModel.traverse(function(o){ if (o.isMesh){ o.castShadow = true; o.receiveShadow = true; } });
+      scene.add(tlModel);
+    }
+
+    // ---- Car ----
+    car = new THREE.Group();
+    if (ASSETS.car){
+      var carModel = ASSETS.car.clone(true);
+      carModel.position.set(0,0,0);
+      carModel.quaternion.identity();
+      carModel.scale.set(1,1,1);
+      carModel.updateMatrixWorld(true);
+      var rawSize = new THREE.Box3().setFromObject(carModel).getSize(new THREE.Vector3());
+      if (rawSize.x > rawSize.z) carModel.rotation.y = Math.PI/2;
+      carModel.updateMatrixWorld(true);
+      var normSize = new THREE.Box3().setFromObject(carModel).getSize(new THREE.Vector3());
+      var carScale = 4.4 / normSize.z;
+      carModel.scale.setScalar(carScale);
+      carModel.updateMatrixWorld(true);
+      var carBox = new THREE.Box3().setFromObject(carModel);
+      var carCenter = carBox.getCenter(new THREE.Vector3());
+      carModel.position.x -= carCenter.x;
+      carModel.position.z -= carCenter.z;
+      carModel.position.y -= carBox.min.y;
+      carModel.rotation.y += Math.PI;
+      carModel.traverse(function(o){ if (o.isMesh){ o.castShadow = true; o.receiveShadow = true; } });
+      car.add(carModel);
+    } else {
+      var body = new THREE.Mesh(
+        new THREE.BoxGeometry(2.2, 0.9, 4.2),
+        new THREE.MeshStandardMaterial({ color: 0x39ff88, emissive: 0x0c3324, emissiveIntensity:0.4, roughness:0.35, metalness:0.3 })
+      );
+      body.position.y = 0.75;
+      body.castShadow = true;
+      car.add(body);
+
+      var cabin = new THREE.Mesh(
+        new THREE.BoxGeometry(1.5, 0.6, 2.0),
+        new THREE.MeshStandardMaterial({ color: 0x0b1613, roughness:0.2, metalness:0.6 })
+      );
+      cabin.position.set(0, 1.35, -0.2);
+      cabin.castShadow = true;
+      car.add(cabin);
+
+      var wheelGeo = new THREE.CylinderGeometry(0.45, 0.45, 0.4, 16);
+      var wheelMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness:0.9 });
+      [[-1.15,0.45,1.4],[1.15,0.45,1.4],[-1.15,0.45,-1.4],[1.15,0.45,-1.4]].forEach(function(p){
+        var w = new THREE.Mesh(wheelGeo, wheelMat);
+        w.rotation.z = Math.PI/2;
+        w.position.set(p[0],p[1],p[2]);
+        w.castShadow = true;
+        car.add(w);
+      });
+
+      var headlightGeo = new THREE.SphereGeometry(0.14, 8, 8);
+      var headlightMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+      [[-0.7,0.75,2.05],[0.7,0.75,2.05]].forEach(function(p){
+        var h = new THREE.Mesh(headlightGeo, headlightMat);
+        h.position.set(p[0],p[1],p[2]);
+        car.add(h);
+      });
+    }
+
+    var startPt = hubPts[0], startNext = hubPts[1];
+    car.position.set(startPt.x, 0, startPt.z);
+    car.rotation.y = Math.atan2(startNext.x - startPt.x, startNext.z - startPt.z);
+    scene.add(car);
+
+    input = { forward:false, backward:false, left:false, right:false };
+    forwardVec = new THREE.Vector3();
+    camOffset = new THREE.Vector3(0, 4.2, -8.5);
+    camTarget = new THREE.Vector3();
+
+    window.addEventListener('keydown', function(e){
+      if (controlsLocked && e.key.toLowerCase() !== 'escape') return;
+      switch(e.key.toLowerCase()){
+        case 'w': case 'arrowup': input.forward = true; break;
+        case 's': case 'arrowdown': input.backward = true; break;
+        case 'a': case 'arrowleft': input.left = true; break;
+        case 'd': case 'arrowright': input.right = true; break;
+        case 'e': tryInteract(); break;
+        case 'escape': closePanel(); break;
+      }
+    });
+    window.addEventListener('keyup', function(e){
+      switch(e.key.toLowerCase()){
+        case 'w': case 'arrowup': input.forward = false; break;
+        case 's': case 'arrowdown': input.backward = false; break;
+        case 'a': case 'arrowleft': input.left = false; break;
+        case 'd': case 'arrowright': input.right = false; break;
+      }
+    });
+
+    function bindHold(id, onFlag){
+      var el = document.getElementById(id);
+      var set = function(v){ return function(ev){ ev.preventDefault(); onFlag(v); }; };
+      el.addEventListener('touchstart', set(true), {passive:false});
+      el.addEventListener('touchend', set(false), {passive:false});
+      el.addEventListener('mousedown', set(true));
+      el.addEventListener('mouseup', set(false));
+      el.addEventListener('mouseleave', set(false));
+    }
+    bindHold('btn-accel', function(v){ input.forward = v; });
+    bindHold('btn-brake', function(v){ input.backward = v; });
+    bindHold('btn-left', function(v){ input.left = v; });
+    bindHold('btn-right', function(v){ input.right = v; });
+    document.getElementById('btn-interact').addEventListener('touchstart', function(e){ e.preventDefault(); tryInteract(); });
+    document.getElementById('btn-interact').addEventListener('click', tryInteract);
+    if ('ontouchstart' in window){
+      document.getElementById('touch-controls').classList.add('active');
+    }
+
+    promptEl = document.getElementById('station-prompt');
+    promptTextEl = document.getElementById('station-prompt-text');
+    panelOverlay = document.getElementById('panel-overlay');
+    panelEyebrow = document.getElementById('panel-eyebrow');
+    panelTitle = document.getElementById('panel-title');
+    panelBody = document.getElementById('panel-body');
+    document.getElementById('panel-close').addEventListener('click', closePanel);
+    panelOverlay.addEventListener('click', function(e){ if (e.target === panelOverlay) closePanel(); });
+
+    mmCanvas = document.getElementById('minimap');
+    mmCtx = mmCanvas.getContext('2d');
+    MM_SCALE = 0.4;
+
+    clock = new THREE.Clock();
+  }
+
+  var startBtn = document.getElementById('start-btn');
+  startBtn.addEventListener('click', function(){
+    startBtn.disabled = true;
+    document.getElementById('fatal-error').style.display = 'none';
+    function go(){
+      startBtn.textContent = 'Loading…';
+      setTimeout(function(){
+        try {
+          initWorld();
+          document.getElementById('intro').style.display = 'none';
+          document.getElementById('hud').classList.add('active');
+          running = true;
+          clock.start();
+        } catch(e){
+          showFatalError(e.message || String(e));
+        }
+      }, 30);
+    }
+    if (assetsSettled){
+      go();
+    } else {
+      startBtn.textContent = 'Loading assets…';
+      var waitTimer = setInterval(function(){
+        if (assetsSettled){
+          clearInterval(waitTimer);
+          go();
+        }
+      }, 100);
+    }
+  });
+
+
+})();
+</script>
+</body>
+</html>
