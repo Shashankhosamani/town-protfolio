@@ -1,0 +1,11 @@
+Model Information:
+* title:	Ford Mustang GT3 | www.vecarz.com
+* source:	https://sketchfab.com/3d-models/ford-mustang-gt3-wwwvecarzcom-061487e4e4fa4cd1bf7e15eae2e238ba
+* author:	vecarz (https://sketchfab.com/heynic)
+
+Model License:
+* license type:	CC-BY-NC-SA-4.0 (http://creativecommons.org/licenses/by-nc-sa/4.0/)
+* requirements:	Author must be credited. No commercial use. Modified versions must have the same license.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Ford Mustang GT3 | www.vecarz.com" (https://sketchfab.com/3d-models/ford-mustang-gt3-wwwvecarzcom-061487e4e4fa4cd1bf7e15eae2e238ba) by vecarz (https://sketchfab.com/heynic) licensed under CC-BY-NC-SA-4.0 (http://creativecommons.org/licenses/by-nc-sa/4.0/)
