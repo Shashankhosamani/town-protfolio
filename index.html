@@ -1,0 +1,1820 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Shashank Hosamani — Portfolio Town</title>
+<meta name="description" content="An interactive 3D portfolio: drive through a small town where each city is a section — Projects, Skills, Experience, Contact." />
+<meta name="theme-color" content="#0c0f18" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<!-- All portfolio copy lives here. Edit content.js, not this file. -->
+<script src="content.js"></script>
+<style>
+  :root{
+    --bg: #0c0f18;
+    --accent: #ffcf8a;
+    --blue: #4da6ff;
+    --amber: #ffb84d;
+    --pink: #ff6b9d;
+    --violet: #a685ff;
+    --ink: #f3f0ea;
+    --ink-dim: #9aa0b0;
+    --line: #2c3244;
+    --card: rgba(255,255,255,0.035);
+    --panel-bg: rgba(12, 14, 22, 0.95);
+    --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Consolas, monospace;
+    --sans: 'Inter', -apple-system, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  *{ box-sizing: border-box; }
+
+  html, body{
+    margin:0; padding:0; width:100%; height:100%;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    overflow: hidden;
+    -webkit-tap-highlight-color: transparent;
+  }
+  a{ color: var(--accent); }
+  button{ font: inherit; }
+  kbd{
+    border: 1px solid #3a4258; border-radius: 3px; padding: 1px 6px;
+    font-family: var(--mono); font-size: 0.92em; color: var(--ink);
+    background: rgba(255,255,255,0.03);
+  }
+  .sr-only{
+    position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+    overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0;
+  }
+
+  #canvas-wrap{ position:fixed; inset:0; }
+  canvas{ display:block; touch-action:none; }
+
+  /* ---------- Buttons ---------- */
+  .btn{
+    font-family: var(--mono); font-size: 13px; font-weight: 500;
+    background: transparent; color: var(--ink); border: 1px solid var(--line);
+    padding: 10px 18px; border-radius: 4px; cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+    text-decoration: none; display:inline-flex; align-items:center; gap: 8px;
+  }
+  .btn:hover{ border-color: var(--accent); background: rgba(255,207,138,0.06); }
+  .btn:focus-visible{ outline: 2px solid var(--accent); outline-offset: 2px; }
+  .btn.primary{
+    background: var(--accent); color: #241706; border-color: var(--accent);
+    font-size: 14px; padding: 14px 30px;
+    box-shadow: 0 0 24px rgba(255,207,138,0.3);
+  }
+  .btn.primary:hover{ transform: translateY(-1px); box-shadow: 0 0 32px rgba(255,207,138,0.45); background: var(--accent); }
+  .btn.primary:disabled{ opacity: 0.7; cursor: progress; transform:none; }
+  .btn.small{ padding: 6px 10px; font-size: 12px; }
+
+  /* ---------- Intro ---------- */
+  #intro{
+    position:fixed; inset:0; z-index:50;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    background: radial-gradient(ellipse at center, #14182a 0%, #08090f 70%);
+    text-align:center; padding: 24px; overflow-y:auto;
+  }
+  #intro .kicker{
+    font-family: var(--mono); font-size: 13px; letter-spacing: 0.04em;
+    color: var(--accent); margin-bottom: 18px;
+  }
+  #intro h1{
+    font-size: clamp(30px, 6vw, 56px); font-weight: 700; line-height: 1.06;
+    margin: 0 0 10px 0;
+  }
+  #intro .role{ font-family: var(--mono); font-size: 13px; color: var(--ink-dim); margin-bottom: 18px; }
+  #intro p.lede{
+    color: var(--ink-dim); max-width: 50ch; line-height: 1.55; margin: 0 0 26px 0;
+    font-size: 15px;
+  }
+  #intro .city-legend{
+    display:flex; gap: 8px; flex-wrap:wrap; justify-content:center; margin: 0 0 28px 0;
+    font-family: var(--mono); font-size: 12px;
+  }
+  #intro .city-legend span{
+    border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px;
+    display:inline-flex; align-items:center; gap: 7px;
+  }
+  #intro .city-legend i{ width:8px; height:8px; border-radius:50%; display:inline-block; }
+  #intro .actions{ display:flex; gap: 12px; flex-wrap:wrap; justify-content:center; align-items:center; }
+
+  #load-bar{
+    width: min(260px, 70vw); height: 3px; background: #1d2232; border-radius: 2px;
+    margin: 22px auto 0 auto; overflow:hidden;
+  }
+  #load-bar > div{ height:100%; width:0%; background: var(--accent); transition: width 0.2s ease; }
+  #load-status{ font-family: var(--mono); font-size: 11px; color: var(--ink-dim); margin-top: 8px; min-height: 1.3em; }
+
+  #intro .controls-hint{
+    margin-top: 22px; font-family: var(--mono); font-size: 12px; color: var(--ink-dim);
+    display:flex; gap: 18px; flex-wrap: wrap; justify-content:center; max-width: 640px;
+  }
+  #intro .controls-hint span{ white-space:nowrap; }
+  #intro .notice{
+    margin-top: 18px; max-width: 52ch; font-size: 12.5px; line-height:1.5;
+    color: #ffd9a0; background: rgba(255,184,77,0.08); border: 1px solid rgba(255,184,77,0.3);
+    border-radius: 6px; padding: 10px 14px; text-align:left; display:none;
+  }
+  #intro .notice code{ font-family: var(--mono); color: var(--ink); }
+
+  /* ---------- HUD ---------- */
+  #hud{ position:fixed; inset:0; pointer-events:none; z-index:20; opacity:0; transition: opacity 0.4s ease; }
+  #hud.active{ opacity:1; }
+  #hud.active .hud-interactive{ pointer-events:auto; }
+
+  #hud-top-left{
+    position:absolute; top:16px; left:16px; font-family: var(--mono);
+    font-size: 12px; color: var(--ink-dim); line-height:1.6; max-width: calc(100vw - 180px);
+  }
+  #hud-top-left .brand{ color: var(--ink); font-weight:600; letter-spacing: 0.02em; }
+  #hud-actions{ display:flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  #hud-actions .btn{ background: rgba(10,12,20,0.7); }
+  #fast-travel{ display:flex; gap: 6px; margin-top: 8px; flex-wrap:wrap; }
+  #fast-travel button{
+    font-family: var(--mono); font-size: 11px; cursor:pointer;
+    background: rgba(10,12,20,0.7); color: var(--ink); border: 1px solid var(--line);
+    border-radius: 999px; padding: 4px 10px; display:inline-flex; gap:6px; align-items:center;
+  }
+  #fast-travel button:hover, #fast-travel button:focus-visible{ border-color: currentColor; outline:none; }
+  #fast-travel button i{ width:7px; height:7px; border-radius:50%; display:inline-block; }
+  #fast-travel button kbd{ font-size: 10px; padding: 0 4px; color: var(--ink-dim); }
+
+  #minimap-wrap{
+    position:absolute; top:16px; right:16px; width: 136px; height: 136px;
+    background: rgba(10,12,20,0.7); border: 1px solid #262c3c; border-radius: 6px;
+    overflow:hidden;
+  }
+  #minimap{ width:100%; height:100%; display:block; }
+
+  #speed-readout{
+    position:absolute; bottom:18px; left:18px; font-family: var(--mono);
+    font-size: 12px; color: var(--ink-dim);
+  }
+  #speed-readout b{ color: var(--accent); font-size: 20px; font-weight: 700; }
+  #location-readout{ display:block; margin-top: 2px; font-size: 11px; }
+
+  #station-prompt{
+    position:absolute; bottom: 90px; left:50%; transform: translateX(-50%) translateY(8px);
+    font-family: var(--mono); font-size: 13px; color: var(--ink);
+    background: rgba(10,12,20,0.88); border: 1px solid var(--line); border-radius: 5px;
+    padding: 8px 16px; opacity:0; transition: opacity 0.2s ease, transform 0.2s ease;
+    pointer-events: none; white-space: nowrap; cursor: pointer;
+  }
+  #station-prompt.show{ opacity:1; transform: translateX(-50%) translateY(0); pointer-events:auto; }
+  #station-prompt kbd{ margin-right: 6px; color: var(--accent); }
+
+  #toast{
+    position:absolute; top: 18px; left:50%; transform: translateX(-50%);
+    font-family: var(--mono); font-size: 12px; color: var(--ink);
+    background: rgba(10,12,20,0.9); border: 1px solid var(--line); border-radius: 5px;
+    padding: 6px 14px; opacity:0; transition: opacity 0.25s ease; white-space:nowrap;
+  }
+  #toast.show{ opacity:1; }
+
+  /* ---------- Touch controls ---------- */
+  #touch-controls{ position:absolute; inset:0; display:none; pointer-events:none; }
+  #touch-controls.active{ display:block; }
+  .tbtn{
+    position:absolute; pointer-events:auto; width: 64px; height:64px; border-radius: 50%;
+    background: rgba(20,24,36,0.55); border: 1px solid var(--line); color: var(--ink);
+    display:flex; align-items:center; justify-content:center; font-size: 22px;
+    -webkit-user-select:none; user-select:none; touch-action:none;
+  }
+  .tbtn:active, .tbtn.held{ background: rgba(255,207,138,0.22); border-color: var(--accent); }
+  #btn-left{ bottom: 24px; left: 20px; }
+  #btn-right{ bottom: 24px; left: 96px; }
+  #btn-accel{ bottom: 96px; right: 20px; }
+  #btn-brake{ bottom: 24px; right: 20px; }
+  #btn-interact{
+    bottom: 168px; right: 20px; width: 64px; height:56px; border-radius: 28px;
+    background: rgba(255,207,138,0.16); border-color: var(--accent); font-size: 11px;
+    font-family: var(--mono); opacity: 0.35;
+  }
+  #btn-interact.ready{ opacity: 1; }
+  #touch-controls.active ~ #speed-readout{ bottom: 100px; }
+
+  /* ---------- Modal shell (panel, help, list) ---------- */
+  .overlay{
+    position:fixed; inset:0; z-index:60; display:flex; align-items:flex-end;
+    background: rgba(4,5,9,0); pointer-events:none; visibility:hidden;
+    transition: background 0.25s ease, visibility 0s linear 0.3s;
+  }
+  .overlay.open{ background: rgba(4,5,9,0.62); pointer-events:auto; visibility:visible; transition: background 0.25s ease; }
+  .sheet{
+    position:relative; width:100%; max-height: 72vh; background: var(--panel-bg);
+    border-top: 1px solid var(--line); border-radius: 16px 16px 0 0;
+    padding: 28px 24px 24px 24px; transform: translateY(120vh);
+    transition: transform 0.3s cubic-bezier(.2,.8,.2,1);
+    overflow-y: auto; backdrop-filter: blur(6px);
+    display:flex; flex-direction:column;
+  }
+  .overlay.open .sheet{ transform: translateY(0); }
+  @media (min-width: 720px){
+    .overlay{ align-items:center; }
+    .sheet{ max-width: 680px; margin: 0 auto; border-radius: 16px; border: 1px solid var(--line); max-height: 80vh; padding: 32px 32px 26px 32px; }
+  }
+  .sheet-close{
+    position:absolute; top:16px; right:16px; background:none; border:none;
+    color: var(--ink-dim); font-size: 20px; cursor:pointer; line-height:1;
+    width: 34px; height:34px; border-radius:50%;
+  }
+  .sheet-close:hover{ color: var(--ink); background: rgba(255,255,255,0.06); }
+  .sheet-close:focus-visible{ outline: 2px solid var(--accent); }
+
+  .eyebrow{ font-family: var(--mono); font-size: 12px; letter-spacing: 0.03em; margin-bottom: 6px; }
+  .sheet h2{ margin: 0 0 8px 0; font-size: 24px; font-weight: 700; padding-right: 36px; }
+  .section-intro{ color: var(--ink-dim); line-height:1.55; font-size: 14px; margin: 0 0 18px 0; }
+  .body-copy{ color: var(--ink-dim); line-height:1.6; font-size: 14px; }
+
+  .panel-footer{
+    display:flex; justify-content:space-between; gap: 8px; margin-top: 22px; padding-top: 16px;
+    border-top: 1px solid var(--line); flex-wrap: wrap;
+  }
+
+  /* ---------- Section content ---------- */
+  .cards{ display:grid; gap: 12px; }
+  .card{
+    background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px 16px 14px 16px;
+    border-left: 3px solid var(--sec, var(--accent));
+  }
+  .card-head{ display:flex; justify-content:space-between; align-items:baseline; gap: 10px; flex-wrap:wrap; }
+  .card h3{ margin: 0; font-size: 16px; color: var(--ink); }
+  .card .meta{ font-family: var(--mono); font-size: 11.5px; color: var(--ink-dim); }
+  .card p{ margin: 6px 0 8px 0; color: var(--ink); font-size: 14px; line-height: 1.5; opacity: 0.9; }
+  .card ul{ margin: 0 0 10px 0; padding-left: 18px; color: var(--ink-dim); font-size: 13.5px; line-height:1.55; }
+  .card li{ margin-bottom: 3px; }
+  .chips{ display:flex; flex-wrap:wrap; gap: 6px; margin: 4px 0 0 0; padding:0; list-style:none; }
+  .chips li{
+    font-family: var(--mono); font-size: 11.5px; color: var(--ink);
+    border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; margin:0;
+    background: rgba(255,255,255,0.02);
+  }
+  .card-links{ display:flex; gap: 8px; margin-top: 12px; flex-wrap:wrap; }
+
+  .skill-groups{ display:grid; gap: 16px; }
+  @media (min-width: 560px){ .skill-groups{ grid-template-columns: 1fr 1fr; } }
+  .skill-group h3{
+    font-family: var(--mono); font-size: 12px; font-weight: 500; letter-spacing: 0.04em;
+    color: var(--sec, var(--accent)); margin: 0 0 8px 0; text-transform: uppercase;
+  }
+
+  .timeline{ list-style:none; margin:0; padding:0 0 0 18px; border-left: 1px solid var(--line); }
+  .timeline > li{ position:relative; margin: 0 0 20px 0; }
+  .timeline > li::before{
+    content:''; position:absolute; left: -24px; top: 6px; width: 11px; height: 11px; border-radius: 50%;
+    background: var(--bg); border: 2px solid var(--sec, var(--accent));
+  }
+  .timeline h3{ margin: 0; font-size: 16px; }
+  .timeline .org{ color: var(--sec, var(--accent)); }
+  .timeline .meta{ font-family: var(--mono); font-size: 11.5px; color: var(--ink-dim); margin: 2px 0 6px 0; }
+  .timeline p{ margin: 0 0 6px 0; font-size: 14px; line-height: 1.5; }
+  .timeline ul{ margin: 0; padding-left: 18px; color: var(--ink-dim); font-size: 13.5px; line-height: 1.55; }
+
+  .contact-list{ list-style:none; margin:0; padding:0; display:grid; gap: 10px; }
+  .contact-list a, .contact-list .contact-row{
+    display:flex; align-items:center; gap: 14px; text-decoration:none; color: var(--ink);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; background: var(--card);
+    transition: border-color 0.15s ease;
+  }
+  .contact-list a:hover, .contact-list a:focus-visible{ border-color: var(--sec, var(--accent)); outline:none; }
+  .contact-icon{
+    width: 34px; height: 34px; border-radius: 8px; display:flex; align-items:center; justify-content:center;
+    font-family: var(--mono); font-weight: 700; font-size: 13px; flex-shrink:0;
+    background: rgba(255,255,255,0.05); color: var(--sec, var(--accent));
+  }
+  .contact-list .label{ font-size: 12px; color: var(--ink-dim); font-family: var(--mono); }
+  .contact-list .value{ font-size: 14px; word-break: break-all; }
+  .copy-btn{ margin-left:auto; }
+
+  .todo{ color: #ffb84d; border-bottom: 1px dashed rgba(255,184,77,0.6); }
+
+  /* ---------- Help ---------- */
+  .help-grid{ display:grid; grid-template-columns: auto 1fr; gap: 10px 18px; font-size: 14px; align-items:center; }
+  .help-grid dt{ font-family: var(--mono); white-space:nowrap; }
+  .help-grid dd{ margin:0; color: var(--ink-dim); }
+  .help-h{ font-family: var(--mono); font-size: 12px; color: var(--accent); margin: 18px 0 10px 0; letter-spacing: 0.04em; }
+
+  /* ---------- List view (no-3D, full page) ---------- */
+  #list-view .sheet{ max-width: 820px; max-height: 92vh; }
+  @media (min-width: 720px){ .list-nav{ top: -32px; } }
+  @media (max-width: 719px){ #list-view .sheet{ max-height: 100vh; height: 100vh; border-radius: 0; } }
+  .list-nav{
+    position: sticky; top: -28px; z-index: 2; margin: -4px -4px 8px -4px; padding: 10px 4px;
+    background: #0c0e16; display:flex; gap: 6px; flex-wrap:wrap; border-bottom: 1px solid var(--line);
+  }
+  .list-section{ padding: 22px 0 6px 0; scroll-margin-top: 60px; }
+  .list-section + .list-section{ border-top: 1px solid var(--line); }
+  .list-section h2{ font-size: 21px; }
+  .credits{ font-size: 12.5px; color: var(--ink-dim); line-height: 1.6; }
+  .credits li{ margin-bottom: 6px; }
+
+  @media (prefers-reduced-motion: reduce){
+    .sheet, .overlay, #station-prompt, #hud, #toast{ transition: none !important; }
+  }
+
+  #fatal-error{
+    position:fixed; top:0; left:0; right:0; z-index:100;
+    background:#3a0d0d; color:#ffd7d7; font-family: var(--mono);
+    font-size:12px; line-height:1.5; padding:12px 16px; display:none;
+    white-space:pre-wrap; border-bottom:1px solid #ff6b6b;
+  }
+</style>
+</head>
+<body>
+
+<div id="fatal-error" role="alert"></div>
+<div id="canvas-wrap" aria-hidden="true"></div>
+
+<!-- ============ Intro ============ -->
+<div id="intro">
+  <div class="kicker">// portfolio town</div>
+  <h1 id="intro-name">Shashank Hosamani</h1>
+  <div class="role" id="intro-role"></div>
+  <p class="lede" id="intro-lede">Drive a car through a small town at dusk. Four roads lead out of the town square, each to its own city — and each city is a section of my portfolio.</p>
+  <div class="city-legend">
+    <span><i style="background:var(--blue)"></i>Projects · east</span>
+    <span><i style="background:var(--amber)"></i>Skills · north</span>
+    <span><i style="background:var(--pink)"></i>Experience · south</span>
+    <span><i style="background:var(--violet)"></i>Contact · west</span>
+  </div>
+  <div class="actions">
+    <button class="btn primary" id="start-btn">Start Engine</button>
+    <button class="btn" id="intro-list-btn">Skip the drive — read as a page</button>
+    <a class="btn" id="intro-resume" href="#" target="_blank" rel="noopener" style="display:none">Résumé ↗</a>
+  </div>
+  <div id="load-bar" aria-hidden="true"><div></div></div>
+  <div id="load-status" aria-live="polite">Loading 3D models…</div>
+  <div class="controls-hint">
+    <span><kbd>W</kbd>/<kbd>↑</kbd> drive</span>
+    <span><kbd>S</kbd>/<kbd>↓</kbd> brake / reverse</span>
+    <span><kbd>A</kbd> <kbd>D</kbd> steer</span>
+    <span><kbd>E</kbd> enter a shop</span>
+    <span><kbd>1</kbd>–<kbd>4</kbd> fast travel</span>
+    <span><kbd>H</kbd> help</span>
+    <span>drag to look around</span>
+  </div>
+  <div class="notice" id="file-notice">
+    You opened this file straight from disk, so the browser blocks the 3D models — you'll get simple placeholder shapes instead.
+    For the full look, serve the folder: run <code>python3 -m http.server</code> in it and open <code>http://localhost:8000</code>.
+  </div>
+  <div class="notice" id="webgl-notice">
+    Your browser or device can't run WebGL, so the 3D town is unavailable. Everything is still readable in the page view.
+  </div>
+</div>
+
+<!-- ============ HUD ============ -->
+<div id="hud">
+  <div id="hud-top-left">
+    <div class="brand" id="hud-brand">SHASHANK.DEV</div>
+    <div id="hud-role"></div>
+    <div id="fast-travel" class="hud-interactive" aria-label="Fast travel"></div>
+    <div id="hud-actions" class="hud-interactive">
+      <button class="btn small" id="hud-help-btn" title="Controls (H)">? Help</button>
+      <button class="btn small" id="hud-list-btn" title="Read as a page (L)">≡ Page view</button>
+      <button class="btn small" id="hud-reset-btn" title="Back to the town square (R)">⟲ Reset</button>
+    </div>
+  </div>
+
+  <div id="minimap-wrap" aria-hidden="true"><canvas id="minimap" width="272" height="272"></canvas></div>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+
+  <div id="station-prompt" class="hud-interactive"><kbd>E</kbd><span id="station-prompt-text">Explore Projects</span></div>
+
+  <div id="touch-controls">
+    <div class="tbtn" id="btn-left" aria-label="Steer left">◀</div>
+    <div class="tbtn" id="btn-right" aria-label="Steer right">▶</div>
+    <div class="tbtn" id="btn-accel" aria-label="Accelerate">▲</div>
+    <div class="tbtn" id="btn-brake" aria-label="Brake">▼</div>
+    <div class="tbtn" id="btn-interact" aria-label="Enter shop">ENTER</div>
+  </div>
+
+  <div id="speed-readout"><b id="speed-val">0</b> km/h<span id="location-readout">Town square</span></div>
+</div>
+
+<!-- ============ Station panel ============ -->
+<div id="panel-overlay" class="overlay">
+  <div id="panel" class="sheet" role="dialog" aria-modal="true" aria-labelledby="panel-title">
+    <button class="sheet-close" id="panel-close" aria-label="Close">✕</button>
+    <div class="eyebrow" id="panel-eyebrow">STATION</div>
+    <h2 id="panel-title">Title</h2>
+    <div id="panel-body"></div>
+    <div class="panel-footer">
+      <button class="btn small" id="panel-prev">←</button>
+      <button class="btn small" id="panel-back">Back to driving <kbd>Esc</kbd></button>
+      <button class="btn small" id="panel-next">→</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ Help ============ -->
+<div id="help-overlay" class="overlay">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="help-title">
+    <button class="sheet-close" data-close="help" aria-label="Close">✕</button>
+    <div class="eyebrow" style="color:var(--accent)">HOW TO PLAY</div>
+    <h2 id="help-title">Controls</h2>
+    <p class="section-intro">Drive to a city and pull up next to its glowing shop. When the prompt appears, press <kbd>E</kbd> to open that section.</p>
+    <div class="help-h">DRIVING</div>
+    <dl class="help-grid">
+      <dt><kbd>W</kbd> / <kbd>↑</kbd></dt><dd>Accelerate</dd>
+      <dt><kbd>S</kbd> / <kbd>↓</kbd></dt><dd>Brake, then reverse</dd>
+      <dt><kbd>A</kbd> <kbd>D</kbd> / <kbd>←</kbd> <kbd>→</kbd></dt><dd>Steer</dd>
+      <dt>Drag</dt><dd>Look around (camera springs back)</dd>
+    </dl>
+    <div class="help-h">SHORTCUTS</div>
+    <dl class="help-grid">
+      <dt><kbd>E</kbd> / <kbd>Enter</kbd></dt><dd>Enter the nearby shop</dd>
+      <dt><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd></dt><dd>Fast travel to Projects, Skills, Experience, Contact</dd>
+      <dt><kbd>R</kbd></dt><dd>Reset to the town square</dd>
+      <dt><kbd>L</kbd></dt><dd>Read everything as a normal page</dd>
+      <dt><kbd>H</kbd> / <kbd>?</kbd></dt><dd>This help</dd>
+      <dt><kbd>Esc</kbd></dt><dd>Close any window</dd>
+    </dl>
+    <div class="help-h">ON A PHONE</div>
+    <p class="body-copy" style="margin:0">Use the on-screen arrows to drive; tap <b>ENTER</b> when it lights up. The fast-travel chips at the top left take you straight to a city.</p>
+  </div>
+</div>
+
+<!-- ============ List view ============ -->
+<div id="list-view" class="overlay">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="list-title">
+    <button class="sheet-close" data-close="list" aria-label="Close">✕</button>
+    <div class="eyebrow" style="color:var(--accent)" id="list-eyebrow">PORTFOLIO</div>
+    <h2 id="list-title">Shashank Hosamani</h2>
+    <p class="section-intro" id="list-intro"></p>
+    <nav class="list-nav" id="list-nav" aria-label="Sections"></nav>
+    <div id="list-body"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------------------------------------------------------------
+  // Small helpers
+  // ---------------------------------------------------------------
+  function $(id){ return document.getElementById(id); }
+
+  function showFatalError(msg){
+    var el = $('fatal-error');
+    el.textContent = 'Something went wrong: ' + msg + '\n(Open devtools console for the full trace. You can still press L for the page view.)';
+    el.style.display = 'block';
+    var startBtn = $('start-btn');
+    if (startBtn && !running){ startBtn.textContent = 'Start Engine'; startBtn.disabled = false; }
+  }
+  window.addEventListener('error', function(e){ showFatalError(e.message || 'unknown error'); });
+
+  function esc(s){
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+  // Escape + visually flag any "TODO" placeholder so it's obvious
+  // what still needs real content.
+  function txt(s){
+    var e = esc(s);
+    return /TODO/.test(s || '') ? '<span class="todo" title="Placeholder — edit content.js">' + e + '</span>' : e;
+  }
+  function isRealUrl(u){ return typeof u === 'string' && /^(https?:|mailto:|tel:)/i.test(u); }
+
+  var toastTimer = null;
+  function toast(msg){
+    var t = $('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ t.classList.remove('show'); }, 1800);
+  }
+
+  // ---------------------------------------------------------------
+  // Content (from content.js) + section registry
+  // ---------------------------------------------------------------
+  var P = window.PORTFOLIO || {};
+  var profile = P.profile || {};
+
+  // Order here = fast-travel keys 1..4 and panel prev/next order.
+  var SECTIONS = [
+    { key:'projects',   label:'Projects',   color:'#4da6ff', num:'01', dir:'east'  },
+    { key:'skills',     label:'Skills',     color:'#ffb84d', num:'02', dir:'north' },
+    { key:'experience', label:'Experience', color:'#ff6b9d', num:'03', dir:'south' },
+    { key:'contact',    label:'Contact',    color:'#a685ff', num:'04', dir:'west'  }
+  ];
+  var SECTION_BY_KEY = {};
+  SECTIONS.forEach(function(s, i){ s.index = i; SECTION_BY_KEY[s.key] = s; });
+
+  function linkButtons(links){
+    var out = (links || []).filter(function(l){ return isRealUrl(l.url); }).map(function(l){
+      return '<a class="btn small" href="' + esc(l.url) + '" target="_blank" rel="noopener">' + esc(l.label || 'Link') + ' ↗</a>';
+    });
+    return out.length ? '<div class="card-links">' + out.join('') + '</div>' : '';
+  }
+  function bullets(arr){
+    arr = (arr || []).filter(Boolean);
+    return arr.length ? '<ul>' + arr.map(function(b){ return '<li>' + txt(b) + '</li>'; }).join('') + '</ul>' : '';
+  }
+  function chips(arr){
+    arr = (arr || []).filter(Boolean);
+    return arr.length ? '<ul class="chips">' + arr.map(function(c){ return '<li>' + txt(c) + '</li>'; }).join('') + '</ul>' : '';
+  }
+
+  var RENDERERS = {
+    projects: function(d){
+      return '<div class="cards">' + (d.items || []).map(function(p){
+        return '<article class="card">' +
+          '<div class="card-head"><h3>' + txt(p.name) + '</h3>' + (p.year ? '<span class="meta">' + txt(p.year) + '</span>' : '') + '</div>' +
+          (p.summary ? '<p>' + txt(p.summary) + '</p>' : '') +
+          bullets(p.details) + chips(p.tags) + linkButtons(p.links) +
+        '</article>';
+      }).join('') + '</div>';
+    },
+    skills: function(d){
+      return '<div class="skill-groups">' + (d.groups || []).map(function(g){
+        return '<div class="skill-group"><h3>' + txt(g.name) + '</h3>' + chips(g.items) + '</div>';
+      }).join('') + '</div>';
+    },
+    experience: function(d){
+      return '<ol class="timeline">' + (d.items || []).map(function(x){
+        return '<li>' +
+          '<h3>' + txt(x.role) + (x.org ? ' <span class="org">· ' + txt(x.org) + '</span>' : '') + '</h3>' +
+          (x.period ? '<div class="meta">' + txt(x.period) + '</div>' : '') +
+          (x.summary ? '<p>' + txt(x.summary) + '</p>' : '') +
+          bullets(x.highlights) +
+        '</li>';
+      }).join('') + '</ol>';
+    },
+    contact: function(d){
+      var ICON = { email:'@', github:'GH', linkedin:'in', x:'X', website:'www', other:'→' };
+      return '<ul class="contact-list">' + (d.links || []).map(function(l){
+        var url = l.url;
+        if (!url && l.kind === 'email' && l.value && !/TODO/.test(l.value)) url = 'mailto:' + l.value;
+        var inner =
+          '<span class="contact-icon">' + esc(ICON[l.kind] || ICON.other) + '</span>' +
+          '<span><span class="label">' + esc(l.label || l.kind || '') + '</span><br><span class="value">' + txt(l.value || url || '') + '</span></span>';
+        var copy = (l.value && !/TODO/.test(l.value))
+          ? '<button class="btn small copy-btn" data-copy="' + esc(l.value) + '" aria-label="Copy ' + esc(l.label || '') + '">Copy</button>' : '';
+        return '<li>' + (isRealUrl(url)
+          ? '<a href="' + esc(url) + '" target="_blank" rel="noopener">' + inner + copy + '</a>'
+          : '<div class="contact-row">' + inner + copy + '</div>') + '</li>';
+      }).join('') + '</ul>';
+    }
+  };
+
+  function renderSectionBody(key){
+    var d = P[key] || {};
+    var html = d.intro ? '<p class="section-intro">' + txt(d.intro) + '</p>' : '';
+    return html + (RENDERERS[key] ? RENDERERS[key](d) : '');
+  }
+  function sectionTitle(key){ return (P[key] && P[key].title) || SECTION_BY_KEY[key].label; }
+
+  // Copy buttons anywhere (event delegation)
+  document.addEventListener('click', function(e){
+    var b = e.target.closest && e.target.closest('[data-copy]');
+    if (!b) return;
+    e.preventDefault(); e.stopPropagation();
+    var v = b.getAttribute('data-copy');
+    var ok = function(){ b.textContent = 'Copied'; setTimeout(function(){ b.textContent = 'Copy'; }, 1400); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(v).then(ok, function(){});
+    else ok();
+  });
+
+  // ---------------------------------------------------------------
+  // Static text from profile
+  // ---------------------------------------------------------------
+  if (profile.name){
+    $('intro-name').textContent = profile.name;
+    $('list-title').textContent = profile.name;
+    document.title = profile.name + ' — Portfolio Town';
+  }
+  $('intro-role').textContent = [profile.role, (profile.location && !/TODO/.test(profile.location)) ? profile.location : ''].filter(Boolean).join(' · ');
+  if (profile.handle) $('hud-brand').textContent = profile.handle;
+  $('hud-role').textContent = profile.role || '';
+  $('list-intro').textContent = profile.tagline || '';
+  if (isRealUrl(profile.resumeUrl)){
+    var rb = $('intro-resume'); rb.href = profile.resumeUrl; rb.style.display = '';
+  }
+
+  // ---------------------------------------------------------------
+  // Overlays: panel / help / list view. Only one open at a time.
+  // ---------------------------------------------------------------
+  var openOverlay = null;     // 'panel' | 'help' | 'list' | null
+  var currentPanelKey = null;
+  var lastFocus = null;
+  var OVERLAY_EL = { panel: $('panel-overlay'), help: $('help-overlay'), list: $('list-view') };
+
+  function showOverlay(name, focusEl){
+    if (openOverlay && openOverlay !== name) OVERLAY_EL[openOverlay].classList.remove('open');
+    if (!openOverlay) lastFocus = document.activeElement;
+    openOverlay = name;
+    OVERLAY_EL[name].classList.add('open');
+    releaseInput();
+    $('station-prompt').classList.remove('show');
+    setTimeout(function(){ (focusEl || OVERLAY_EL[name].querySelector('.sheet-close')).focus(); }, 30);
+  }
+  function closeOverlay(){
+    if (!openOverlay) return;
+    OVERLAY_EL[openOverlay].classList.remove('open');
+    openOverlay = null;
+    currentPanelKey = null;
+    if (location.hash) history.replaceState(null, '', location.pathname + location.search);
+    if (lastFocus && lastFocus.focus && document.body.contains(lastFocus)) lastFocus.focus();
+    else if (renderer) renderer.domElement.focus && renderer.domElement.focus();
+  }
+  Object.keys(OVERLAY_EL).forEach(function(k){
+    OVERLAY_EL[k].addEventListener('click', function(e){ if (e.target === OVERLAY_EL[k]) closeOverlay(); });
+  });
+  document.querySelectorAll('.sheet-close, [data-close]').forEach(function(b){ b.addEventListener('click', closeOverlay); });
+  $('panel-back').addEventListener('click', closeOverlay);
+
+  // Simple focus trap so keyboard users stay inside the open dialog.
+  document.addEventListener('keydown', function(e){
+    if (e.key !== 'Tab' || !openOverlay) return;
+    var f = OVERLAY_EL[openOverlay].querySelectorAll('a[href], button:not([disabled])');
+    if (!f.length) return;
+    var first = f[0], last = f[f.length-1];
+    if (e.shiftKey && document.activeElement === first){ e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last){ e.preventDefault(); first.focus(); }
+  });
+
+  function openPanel(key){
+    var s = SECTION_BY_KEY[key];
+    if (!s) return;
+    currentPanelKey = key;
+    var sheet = $('panel');
+    sheet.style.setProperty('--sec', s.color);
+    $('panel-eyebrow').textContent = 'STOP ' + s.num + ' — ' + s.label.toUpperCase();
+    $('panel-eyebrow').style.color = s.color;
+    $('panel-title').textContent = sectionTitle(key);
+    $('panel-body').innerHTML = renderSectionBody(key);
+    var prev = SECTIONS[(s.index + SECTIONS.length - 1) % SECTIONS.length];
+    var next = SECTIONS[(s.index + 1) % SECTIONS.length];
+    $('panel-prev').textContent = '← ' + prev.label;
+    $('panel-prev').onclick = function(){ openPanel(prev.key); };
+    $('panel-next').textContent = next.label + ' →';
+    $('panel-next').onclick = function(){ openPanel(next.key); };
+    sheet.scrollTop = 0;
+    history.replaceState(null, '', '#' + key);
+    showOverlay('panel');
+  }
+
+  function buildListView(){
+    $('list-nav').innerHTML = SECTIONS.map(function(s){
+      return '<a class="btn small" href="#list-' + s.key + '" style="border-color:' + s.color + '55">' + esc(s.label) + '</a>';
+    }).join('') + '<a class="btn small" href="#list-credits">Credits</a>';
+    $('list-body').innerHTML = SECTIONS.map(function(s){
+      return '<section class="list-section" id="list-' + s.key + '" style="--sec:' + s.color + '">' +
+        '<div class="eyebrow" style="color:' + s.color + '">' + s.num + ' — ' + s.label.toUpperCase() + '</div>' +
+        '<h2>' + esc(sectionTitle(s.key)) + '</h2>' + renderSectionBody(s.key) +
+      '</section>';
+    }).join('') + creditsHtml();
+    // in-sheet anchor nav without touching the page hash
+    $('list-nav').addEventListener('click', function(e){
+      var a = e.target.closest('a'); if (!a) return;
+      e.preventDefault();
+      var t = document.querySelector(a.getAttribute('href'));
+      if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
+
+  // 3D model credits — several of these are CC-BY, which REQUIRES
+  // visible attribution wherever the work is shared.
+  var CREDITS = [
+    { title:'Road Modular', author:'mortalityrexotable', url:'https://sketchfab.com/3d-models/road-modular-74f74f8569ac410f80266d3f1603bffd', license:'CC BY 4.0' },
+    { title:'Dodge Challenger – Muscle Car – Low-Poly', author:'Allay Design', url:'https://sketchfab.com/3d-models/dodge-challenger-muscle-car-low-poly-4c741c8d40c34ebe8b999e5a2823d80f', license:'Sketchfab Standard' },
+    { title:'Australian Traffic Light & Pedestrian Light', author:'JoTrain The Aussie', url:'https://sketchfab.com/3d-models/australian-traffic-light-pedestrain-light-72b20af0bca44dfab473cbbd1f0af7a2', license:'Sketchfab Standard' }
+  ];
+  function creditsHtml(){
+    return '<section class="list-section" id="list-credits">' +
+      '<div class="eyebrow" style="color:var(--ink-dim)">CREDITS</div><h2>Built with</h2>' +
+      '<ul class="credits">' +
+        '<li>Rendering: <a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> r128</li>' +
+        CREDITS.map(function(c){
+          return '<li>"' + esc(c.title) + '" by ' + esc(c.author) + ' — <a href="' + esc(c.url) + '" target="_blank" rel="noopener">Sketchfab</a> (' + esc(c.license) + ')</li>';
+        }).join('') +
+      '</ul></section>';
+  }
+  buildListView();
+
+  function openList(scrollToKey){
+    showOverlay('list');
+    var sheet = OVERLAY_EL.list.querySelector('.sheet');
+    if (scrollToKey){
+      var t = $('list-' + scrollToKey);
+      setTimeout(function(){ if (t) sheet.scrollTop = t.offsetTop - 70; }, 40);
+    }
+  }
+  function openHelp(){ showOverlay('help'); }
+
+  $('intro-list-btn').addEventListener('click', function(){ openList(); });
+  $('hud-list-btn').addEventListener('click', function(){ openList(currentCity); });
+  $('hud-help-btn').addEventListener('click', openHelp);
+
+  // ---------------------------------------------------------------
+  // Environment checks
+  // ---------------------------------------------------------------
+  function hasWebGL(){
+    try {
+      var c = document.createElement('canvas');
+      return !!(window.WebGLRenderingContext && (c.getContext('webgl') || c.getContext('experimental-webgl')));
+    } catch(e){ return false; }
+  }
+  var webglOK = typeof THREE !== 'undefined' && hasWebGL();
+  if (location.protocol === 'file:') $('file-notice').style.display = 'block';
+  if (!webglOK){
+    $('webgl-notice').style.display = 'block';
+    $('start-btn').style.display = 'none';
+    $('load-bar').style.display = 'none';
+    $('load-status').style.display = 'none';
+    document.querySelector('#intro .controls-hint').style.display = 'none';
+    var lb = $('intro-list-btn');
+    lb.classList.add('primary'); lb.textContent = 'Read the portfolio';
+    if (typeof THREE === 'undefined') $('webgl-notice').textContent = "The 3D library couldn't load (offline, or a blocker?). Everything is still readable in the page view.";
+  }
+
+  // Deep link: #list opens page view; #projects etc. opens that section after start.
+  var initialHash = (location.hash || '').replace('#','');
+  if (initialHash === 'list') setTimeout(function(){ openList(); }, 0);
+
+  // ---------------------------------------------------------------
+  // Input state shared by keyboard + touch
+  // ---------------------------------------------------------------
+  var input = { forward:false, backward:false, left:false, right:false };
+  function releaseInput(){
+    input.forward = input.backward = input.left = input.right = false;
+    document.querySelectorAll('.tbtn.held').forEach(function(b){ b.classList.remove('held'); });
+  }
+  window.addEventListener('blur', releaseInput);
+  document.addEventListener('visibilitychange', function(){ if (document.hidden) releaseInput(); });
+
+  // These are assigned once the world exists.
+  var running = false, renderer = null, currentCity = null;
+  var teleportTo = function(){}, resetCar = function(){}, tryInteract = function(){};
+
+  window.addEventListener('keydown', function(e){
+    var k = e.key.toLowerCase();
+    if (k === 'escape'){ closeOverlay(); return; }
+    if (openOverlay){
+      if (openOverlay === 'panel' && (k === 'arrowleft' || k === 'arrowright')){
+        (k === 'arrowleft' ? $('panel-prev') : $('panel-next')).click();
+      }
+      return;
+    }
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (k === 'l'){ openList(running ? currentCity : null); return; }
+    if (k === 'h' || k === '?'){ openHelp(); return; }
+    if (!running) return;
+    switch(k){
+      case 'w': case 'arrowup': input.forward = true; e.preventDefault(); break;
+      case 's': case 'arrowdown': input.backward = true; e.preventDefault(); break;
+      case 'a': case 'arrowleft': input.left = true; e.preventDefault(); break;
+      case 'd': case 'arrowright': input.right = true; e.preventDefault(); break;
+      case 'e': case 'enter': tryInteract(); break;
+      case 'r': resetCar(); break;
+      case '1': case '2': case '3': case '4': teleportTo(SECTIONS[+k - 1].key); break;
+    }
+  });
+  window.addEventListener('keyup', function(e){
+    switch(e.key.toLowerCase()){
+      case 'w': case 'arrowup': input.forward = false; break;
+      case 's': case 'arrowdown': input.backward = false; break;
+      case 'a': case 'arrowleft': input.left = false; break;
+      case 'd': case 'arrowright': input.right = false; break;
+    }
+  });
+
+  if (!webglOK) return;   // nothing 3D below this line can run
+
+  // ---------------------------------------------------------------
+  // Real 3D assets (GLTF), fetched in parallel with the intro screen
+  // so they're usually ready before Start is even clicked. Every use
+  // below degrades gracefully to a procedural version if an asset
+  // fails to load — e.g. the file was opened as file:// instead of
+  // served over http://, which blocks the fetch.
+  // ---------------------------------------------------------------
+  var ASSETS = { road: null, car: null, trafficLight: null };
+  var PREFABS = {};
+  var assetsSettled = false;
+
+  function findByPrefix(root, prefix){
+    var found = null;
+    root.traverse(function(obj){
+      if (!found && obj.name && obj.name.indexOf(prefix) === 0) found = obj;
+    });
+    return found;
+  }
+
+  // Wrap a piece so its own local origin sits at its horizontal
+  // center with its bottom resting on y=0 — makes it drop-in
+  // placeable by position/rotation alone, like the procedural pieces.
+  function makeGroundedPrefab(piece){
+    if (!piece) return null;
+    var raw = piece.clone(true);
+    raw.position.set(0,0,0);
+    raw.quaternion.identity();
+    raw.updateMatrixWorld(true);
+    var box = new THREE.Box3().setFromObject(raw);
+    var size = box.getSize(new THREE.Vector3());
+    var center = box.getCenter(new THREE.Vector3());
+    raw.position.x -= center.x;
+    raw.position.z -= center.z;
+    raw.position.y -= box.min.y;
+    var pivot = new THREE.Group();
+    pivot.add(raw);
+    pivot.userData.size = size;
+    return pivot;
+  }
+
+  function buildPrefabs(){
+    if (ASSETS.road){
+      PREFABS.road = makeGroundedPrefab(findByPrefix(ASSETS.road, 'Road_'));
+      PREFABS.lightPole = makeGroundedPrefab(findByPrefix(ASSETS.road, 'Light pole_'));
+      // a straight road piece may have been authored running along
+      // local X or Z — normalize so "forward" is always +Z.
+      if (PREFABS.road && PREFABS.road.userData.size.x > PREFABS.road.userData.size.z){
+        PREFABS.road.children[0].rotation.y = Math.PI/2;
+        var sz = PREFABS.road.userData.size;
+        PREFABS.road.userData.size = new THREE.Vector3(sz.z, sz.y, sz.x);
+      }
+    }
+    assetsSettled = true;
+  }
+
+  function setLoad(frac, msg){
+    $('load-bar').firstElementChild.style.width = Math.round(frac*100) + '%';
+    $('load-status').textContent = msg;
+  }
+
+  function loadAssets(){
+    var loader;
+    try {
+      loader = new THREE.GLTFLoader();
+    } catch(e){
+      console.warn('[assets] GLTFLoader unavailable — using procedural fallback everywhere.', e);
+      setLoad(1, 'Ready (simplified graphics)');
+      assetsSettled = true;
+      return;
+    }
+    var jobs = [
+      { key:'road', url: 'road_modular/scene.web.gltf' },
+      { key:'car', url: 'dodge_challenger_-_muscle_car_-_low-poly/scene.web.gltf' },
+      { key:'trafficLight', url: 'australian_traffic_light__pedestrain_light/scene.web.gltf' }
+    ];
+    var progress = {}, failed = 0, remaining = jobs.length;
+    function report(){
+      var sum = 0;
+      jobs.forEach(function(j){ sum += progress[j.key] || 0; });
+      setLoad(sum / jobs.length, 'Loading 3D models… ' + Math.round(sum / jobs.length * 100) + '%');
+    }
+    function done(){
+      remaining--;
+      report();
+      if (remaining <= 0){
+        buildPrefabs();
+        setLoad(1, failed ? 'Ready — ' + failed + ' model(s) unavailable, using simple shapes' : 'Ready');
+      }
+    }
+    jobs.forEach(function(job){
+      loader.load(job.url, function(gltf){
+        ASSETS[job.key] = gltf.scene;
+        progress[job.key] = 1;
+        done();
+      }, function(xhr){
+        if (xhr && xhr.lengthComputable && xhr.total) { progress[job.key] = Math.min(0.99, xhr.loaded / xhr.total); report(); }
+      }, function(err){
+        console.warn('[assets] ' + job.key + ' failed to load — falling back to procedural. ' +
+          'If you opened this file directly, serve it over http:// instead (e.g. `python3 -m http.server`).', err);
+        progress[job.key] = 1; failed++;
+        done();
+      });
+    });
+  }
+  loadAssets();
+
+  // ---------------------------------------------------------------
+  // Cheap, immediate setup: renderer / scene / camera / lights /
+  // ground. Kept small on purpose so it can't be what breaks Start.
+  // ---------------------------------------------------------------
+  var wrap = $('canvas-wrap');
+  var scene = new THREE.Scene();
+  var SKY_COLOR = 0x141826;
+  scene.background = new THREE.Color(SKY_COLOR);
+  scene.fog = new THREE.FogExp2(SKY_COLOR, 0.006);
+
+  var camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 700);
+  camera.position.set(0, 8, -20);
+
+  try {
+    renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance', failIfMajorPerformanceCaveat: false });
+  } catch(e){
+    renderer = new THREE.WebGLRenderer({ antialias:false, failIfMajorPerformanceCaveat:false });
+  }
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.shadowMap.enabled = true;
+  renderer.domElement.style.cursor = 'grab';
+  renderer.domElement.setAttribute('tabindex', '-1');
+  wrap.appendChild(renderer.domElement);
+
+  window.addEventListener('resize', function(){
+    camera.aspect = window.innerWidth/window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  scene.add(new THREE.AmbientLight(0x30405a, 1.0));
+  var sun = new THREE.DirectionalLight(0xffb37a, 0.55);
+  sun.position.set(-60, 40, -28);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(1024,1024);
+  sun.shadow.camera.left = -100; sun.shadow.camera.right = 100;
+  sun.shadow.camera.top = 100; sun.shadow.camera.bottom = -100;
+  scene.add(sun);
+
+  function makeGroundTexture(){
+    var size = 512;
+    var c = document.createElement('canvas');
+    c.width = c.height = size;
+    var ctx = c.getContext('2d');
+    ctx.fillStyle = '#20261c';
+    ctx.fillRect(0,0,size,size);
+    for (var i=0;i<2200;i++){
+      ctx.fillStyle = 'rgba(255,255,255,' + (Math.random()*0.035) + ')';
+      ctx.fillRect(Math.random()*size, Math.random()*size, 2, 2);
+    }
+    var tex = new THREE.CanvasTexture(c);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(38,38);
+    return tex;
+  }
+
+  var ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(600,600),
+    new THREE.MeshStandardMaterial({ map: makeGroundTexture(), roughness:1 })
+  );
+  ground.rotation.x = -Math.PI/2;
+  ground.receiveShadow = true;
+  scene.add(ground);
+
+  renderer.render(scene, camera);
+
+  // ---------------------------------------------------------------
+  // Mouse / touch drag to look around; spring-back happens in
+  // updateCamera once the world is running.
+  // ---------------------------------------------------------------
+  var isDragging = false, lastPX = 0, lastPY = 0;
+  var lookYaw = 0, lookPitch = 0;
+  var LOOK_SENS = 0.006;
+  var PITCH_MIN = -0.45, PITCH_MAX = 0.55;
+
+  renderer.domElement.addEventListener('pointerdown', function(e){
+    isDragging = true; lastPX = e.clientX; lastPY = e.clientY;
+    renderer.domElement.style.cursor = 'grabbing';
+    try { renderer.domElement.setPointerCapture(e.pointerId); } catch(err){}
+  });
+  renderer.domElement.addEventListener('pointermove', function(e){
+    if (!isDragging) return;
+    var dx = e.clientX - lastPX, dy = e.clientY - lastPY;
+    lastPX = e.clientX; lastPY = e.clientY;
+    lookYaw -= dx * LOOK_SENS;
+    lookPitch = Math.max(PITCH_MIN, Math.min(PITCH_MAX, lookPitch - dy * LOOK_SENS));
+  });
+  function endDrag(){ isDragging = false; renderer.domElement.style.cursor = 'grab'; }
+  renderer.domElement.addEventListener('pointerup', endDrag);
+  renderer.domElement.addEventListener('pointercancel', endDrag);
+  renderer.domElement.addEventListener('pointerleave', endDrag);
+
+  // ---------------------------------------------------------------
+  // World state — built lazily on Start so a slow or failing build
+  // can't block the button itself from responding.
+  // ---------------------------------------------------------------
+  var roads = [];                    // [{ key, centerPts, normals, closed }]
+  var allPts = [], allNormals = [];  // merged, for boundary collision
+  var stationMeshes = [], car, CITY_DEFS = [], hubPtsRef = null;
+  var ROAD_HALF, CURB_WIDTH, SIDEWALK_WIDTH, STREET_EDGE, SIDEWALK_OUTER, CAR_HALF;
+  var speed = 0, MAX_SPEED, ACCEL, BRAKE, FRICTION, TURN_RATE, BOUND_LIMIT;
+  var camOffset, camTarget, forwardVec;
+  var mmCanvas, mmCtx, MM_SCALE;
+  var promptEl, promptTextEl, nearestStation = null;
+  var clock, worldBuilt = false;
+  var speedEl = $('speed-val'), locEl = $('location-readout');
+
+  function computeNormals(pts, closed){
+    var out = [];
+    for (var i=0;i<pts.length;i++){
+      var prev, next;
+      if (closed){
+        prev = pts[(i-1+pts.length)%pts.length];
+        next = pts[(i+1)%pts.length];
+      } else {
+        prev = pts[Math.max(0,i-1)];
+        next = pts[Math.min(pts.length-1,i+1)];
+      }
+      var tangent = next.clone().sub(prev).normalize();
+      out.push(new THREE.Vector3(-tangent.z, 0, tangent.x).normalize());
+    }
+    return out;
+  }
+
+  function buildFlatRibbon(centerPts, normals, closed, innerDist, outerDist, y, colorFn){
+    var positions = [], colors = [];
+    var c = new THREE.Color();
+    var segCount = closed ? centerPts.length : centerPts.length - 1;
+    for (var i=0;i<segCount;i++){
+      var i2 = (i+1) % centerPts.length;
+      var p0 = centerPts[i], p1 = centerPts[i2];
+      var n0 = normals[i], n1 = normals[i2];
+      var aIn = new THREE.Vector3().copy(p0).addScaledVector(n0, innerDist); aIn.y = y;
+      var aOut = new THREE.Vector3().copy(p0).addScaledVector(n0, outerDist); aOut.y = y;
+      var bIn = new THREE.Vector3().copy(p1).addScaledVector(n1, innerDist); bIn.y = y;
+      var bOut = new THREE.Vector3().copy(p1).addScaledVector(n1, outerDist); bOut.y = y;
+      c.set(colorFn(i));
+      [aIn,aOut,bOut, aIn,bOut,bIn].forEach(function(v){
+        positions.push(v.x, v.y, v.z);
+        colors.push(c.r, c.g, c.b);
+      });
+    }
+    var geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    geo.computeVertexNormals();
+    return geo;
+  }
+
+  // Cumulative arc length along a point path, for evenly spacing
+  // discrete road-kit tiles over a continuous spline.
+  function arcLengthTable(pts, closed){
+    var cum = [0];
+    for (var i=1;i<pts.length;i++) cum.push(cum[i-1] + pts[i].distanceTo(pts[i-1]));
+    if (closed) cum.push(cum[cum.length-1] + pts[0].distanceTo(pts[pts.length-1]));
+    return cum;
+  }
+
+  function sampleAtArcLength(pts, cum, dist){
+    var n = pts.length;
+    for (var i=1;i<cum.length;i++){
+      if (cum[i] >= dist){
+        var segLen = cum[i] - cum[i-1];
+        var t = segLen > 1e-6 ? (dist - cum[i-1]) / segLen : 0;
+        var a = pts[i-1], b = pts[i % n];
+        var point = a.clone().lerp(b, t);
+        var tangent = b.clone().sub(a).normalize();
+        return { point: point, tangent: tangent };
+      }
+    }
+    var last = pts[n-1], prev = pts[Math.max(0,n-2)];
+    return { point: last.clone(), tangent: last.clone().sub(prev).normalize() };
+  }
+
+  function tileRoadWithKit(road){
+    var pts = road.centerPts;
+    var cum = arcLengthTable(pts, road.closed);
+    var total = cum[cum.length-1];
+    var pieceLen = PREFABS.road.userData.size.z;
+    var n = Math.max(1, Math.round(total / pieceLen));
+    var step = total / n;
+    var widthFix = (ROAD_HALF*2) / PREFABS.road.userData.size.x;
+    for (var s=0; s<n; s++){
+      var res = sampleAtArcLength(pts, cum, (s+0.5)*step);
+      var tile = PREFABS.road.clone(true);
+      tile.position.copy(res.point);
+      tile.position.y = 0.02;
+      tile.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1), res.tangent);
+      tile.scale.set(widthFix, 1, step/pieceLen);
+      scene.add(tile);
+    }
+  }
+
+  function buildRoadSurfaceProcedural(road){
+    var roadGeo = buildFlatRibbon(road.centerPts, road.normals, road.closed, -ROAD_HALF, ROAD_HALF, 0.02, function(){ return '#26262b'; });
+    scene.add(new THREE.Mesh(roadGeo, new THREE.MeshStandardMaterial({ vertexColors:true, roughness:0.95 })));
+    var dashGeo = buildFlatRibbon(road.centerPts, road.normals, road.closed, -0.1, 0.1, 0.03, function(i){ return (Math.floor(i/6)%2===0) ? '#e9e6de' : '#26262b'; });
+    scene.add(new THREE.Mesh(dashGeo, new THREE.MeshBasicMaterial({ vertexColors:true })));
+  }
+
+  function buildRoadSurface(road){
+    if (PREFABS.road) tileRoadWithKit(road);
+    else buildRoadSurfaceProcedural(road);
+
+    var curbMat = new THREE.MeshStandardMaterial({ vertexColors:true, roughness:0.8 });
+    scene.add(new THREE.Mesh(buildFlatRibbon(road.centerPts, road.normals, road.closed, ROAD_HALF, STREET_EDGE, 0.035, function(){ return '#c9c4b6'; }), curbMat));
+    scene.add(new THREE.Mesh(buildFlatRibbon(road.centerPts, road.normals, road.closed, -STREET_EDGE, -ROAD_HALF, 0.035, function(){ return '#c9c4b6'; }), curbMat));
+
+    var walkMat = new THREE.MeshStandardMaterial({ vertexColors:true, roughness:0.95 });
+    scene.add(new THREE.Mesh(buildFlatRibbon(road.centerPts, road.normals, road.closed, STREET_EDGE, SIDEWALK_OUTER, 0.03, function(){ return '#8b8879'; }), walkMat));
+    scene.add(new THREE.Mesh(buildFlatRibbon(road.centerPts, road.normals, road.closed, -SIDEWALK_OUTER, -STREET_EDGE, 0.03, function(){ return '#8b8879'; }), walkMat));
+  }
+
+  var buildingTexCache = {};
+  function getBuildingTextures(baseColorHex){
+    if (buildingTexCache[baseColorHex]) return buildingTexCache[baseColorHex];
+    var w=128, h=128;
+    var c1 = document.createElement('canvas'); c1.width=w; c1.height=h;
+    var ctx1 = c1.getContext('2d');
+    ctx1.fillStyle = baseColorHex; ctx1.fillRect(0,0,w,h);
+    var c2 = document.createElement('canvas'); c2.width=w; c2.height=h;
+    var ctx2 = c2.getContext('2d');
+    ctx2.fillStyle = '#000000'; ctx2.fillRect(0,0,w,h);
+    var cols=5, rows=6, cellW=w/cols, cellH=h/rows;
+    for (var r=0;r<rows;r++){
+      for (var col=0;col<cols;col++){
+        if (Math.random() < 0.55){
+          var x = col*cellW + cellW*0.22, y = r*cellH + cellH*0.22;
+          var ww = cellW*0.56, hh = cellH*0.56;
+          ctx1.fillStyle = '#332a1f'; ctx1.fillRect(x,y,ww,hh);
+          var lit = Math.random() < 0.6;
+          ctx2.fillStyle = lit ? '#ffd9a0' : '#0c0c0c';
+          ctx2.fillRect(x,y,ww,hh);
+        }
+      }
+    }
+    var entry = { map: new THREE.CanvasTexture(c1), emissiveMap: new THREE.CanvasTexture(c2) };
+    buildingTexCache[baseColorHex] = entry;
+    return entry;
+  }
+
+  var buildingMatCache = {};
+  function makeBuildingMaterials(baseColorHex){
+    if (buildingMatCache[baseColorHex]) return buildingMatCache[baseColorHex];
+    var tex = getBuildingTextures(baseColorHex);
+    var sideMat = new THREE.MeshStandardMaterial({
+      map: tex.map, emissiveMap: tex.emissiveMap, emissive: 0xffcf8a,
+      emissiveIntensity: 0.85, roughness: 0.85
+    });
+    var roofMat = new THREE.MeshStandardMaterial({ color: 0x201c18, roughness: 0.9 });
+    var baseMat = new THREE.MeshStandardMaterial({ color: 0x120f0c, roughness: 1 });
+    var mats = [sideMat, sideMat, roofMat, baseMat, sideMat, sideMat];
+    buildingMatCache[baseColorHex] = mats;
+    return mats;
+  }
+
+  var DEFAULT_PALETTE = ['#b5654a','#d9b27c','#6f7f6a','#5a6b8c','#8a5a6b','#c9a15a','#4f5d4a','#9c7a52'];
+
+  function placeBuildingAt(pt, n, tangentAngle, palette){
+    var pal = palette || DEFAULT_PALETTE;
+    var d = 4 + Math.random()*2.4;
+    var offset = SIDEWALK_OUTER + d/2 + 1.2;
+    var pos = pt.clone().addScaledVector(n, offset);
+    // don't place a building on or inside another road's footprint
+    if (distanceToAnyRoad(pos) < SIDEWALK_OUTER + 1.5) return;
+    var w = 4 + Math.random()*3.4, h = 5 + Math.random()*8;
+    var color = pal[Math.floor(Math.random()*pal.length)];
+    var mesh = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), makeBuildingMaterials(color));
+    mesh.position.set(pos.x, h/2, pos.z);
+    mesh.rotation.y = tangentAngle;
+    mesh.castShadow = true; mesh.receiveShadow = true;
+    scene.add(mesh);
+  }
+
+  function placeStreetlightAt(pt, n, lightColor){
+    var color = lightColor !== undefined ? lightColor : 0xffcf8a;
+    var offset = STREET_EDGE + 0.5;
+    var pos = pt.clone().addScaledVector(n, offset);
+    var lampY;
+    if (PREFABS.lightPole){
+      var pole = PREFABS.lightPole.clone(true);
+      var targetHeight = 3.6;
+      var scaleFactor = targetHeight / PREFABS.lightPole.userData.size.y;
+      pole.scale.setScalar(scaleFactor);
+      pole.position.set(pos.x, 0, pos.z);
+      pole.rotation.y = Math.atan2(n.x, n.z) + Math.PI;
+      pole.castShadow = true;
+      scene.add(pole);
+      lampY = targetHeight * 0.92;
+    } else {
+      var poleMesh = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.08,0.08,3.2,6),
+        new THREE.MeshStandardMaterial({ color:0x2a2a2e, roughness:0.6 })
+      );
+      poleMesh.position.set(pos.x, 1.6, pos.z);
+      poleMesh.castShadow = true;
+      scene.add(poleMesh);
+      lampY = 3.25;
+    }
+    var lamp = new THREE.Mesh(new THREE.SphereGeometry(0.18,8,8), new THREE.MeshBasicMaterial({ color: color }));
+    lamp.position.set(pos.x, lampY, pos.z);
+    scene.add(lamp);
+    var light = new THREE.PointLight(color, 0.8, 13);
+    light.position.copy(lamp.position);
+    scene.add(light);
+  }
+
+  // Populate one road with buildings + streetlights on both sides.
+  // skipStart/skipEnd guard the ends of an open road; excludeFn lets
+  // callers skip indices near a station.
+  function populateRoad(road, buildStride, lightStride, skipStart, skipEnd, excludeFn, palette, lightColor){
+    var n = road.centerPts.length;
+    var lo = skipStart || 0;
+    var hi = road.closed ? n : n - (skipEnd || 0);
+    for (var i=lo; i<hi; i += buildStride){
+      if (excludeFn && excludeFn(i)) continue;
+      var pt = road.centerPts[i], nrm = road.normals[i];
+      var next = road.centerPts[Math.min(n-1,(i+1)%n)];
+      var prev = road.centerPts[Math.max(0,(i-1+n)%n)];
+      var tang = next.clone().sub(prev).normalize();
+      var rotY = Math.atan2(tang.x, tang.z);
+      placeBuildingAt(pt, nrm, rotY, palette);
+      placeBuildingAt(pt, nrm.clone().negate(), rotY, palette);
+    }
+    for (var j=lo; j<hi; j += lightStride){
+      var pt2 = road.centerPts[j], nrm2 = road.normals[j];
+      placeStreetlightAt(pt2, nrm2, lightColor);
+      placeStreetlightAt(pt2, nrm2.clone().negate(), lightColor);
+    }
+  }
+
+  function makeLabelSprite(text, colorHex){
+    var c = document.createElement('canvas');
+    c.width = 512; c.height = 128;
+    var ctx = c.getContext('2d');
+    ctx.font = '700 56px JetBrains Mono, monospace';
+    ctx.fillStyle = colorHex;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.shadowColor = colorHex; ctx.shadowBlur = 18;
+    ctx.fillText(text, 256, 64);
+    var tex = new THREE.CanvasTexture(c);
+    var mat = new THREE.SpriteMaterial({ map: tex, transparent:true, depthWrite:false, fog:false });
+    var sprite = new THREE.Sprite(mat);
+    sprite.scale.set(8, 2, 1);
+    return sprite;
+  }
+
+  function distanceToAnyRoad(pos){
+    var best = Infinity;
+    for (var i=0;i<allPts.length;i+=4){
+      var d = pos.distanceTo(allPts[i]);
+      if (d < best) best = d;
+    }
+    return best;
+  }
+
+  function makeTree(pos){
+    var trunk = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.15,0.2,1.2,6),
+      new THREE.MeshStandardMaterial({ color:0x4a3323, roughness:1 })
+    );
+    trunk.position.set(pos.x, 0.6, pos.z);
+    trunk.castShadow = true;
+    scene.add(trunk);
+    var leaves = new THREE.Mesh(
+      new THREE.SphereGeometry(1.1,8,8),
+      new THREE.MeshStandardMaterial({ color: Math.random()<0.5 ? 0x3f6b3a : 0x4f7a44, roughness:0.9 })
+    );
+    leaves.position.set(pos.x, 1.7, pos.z);
+    leaves.castShadow = true;
+    scene.add(leaves);
+  }
+
+  function nearestAllIndex(pos){
+    var best = 0, bestDist = Infinity;
+    for (var i=0;i<allPts.length;i+=2){
+      var d = pos.distanceToSquared(allPts[i]);
+      if (d < bestDist){ bestDist = d; best = i; }
+    }
+    return best;
+  }
+
+  function enforceTrackBounds(){
+    var idx = nearestAllIndex(car.position);
+    var p = allPts[idx], n = allNormals[idx];
+    var rel = new THREE.Vector3().subVectors(car.position, p);
+    var lateral = rel.dot(n);
+    if (Math.abs(lateral) > BOUND_LIMIT){
+      var clamped = Math.sign(lateral) * BOUND_LIMIT;
+      var forwardComponent = rel.clone().addScaledVector(n, -lateral);
+      car.position.copy(p).add(forwardComponent).addScaledVector(n, clamped);
+      speed *= 0.45;
+    }
+  }
+
+  function updateCar(dt){
+    var locked = !!openOverlay;
+    if (!locked){
+      if (input.forward) speed += ACCEL * dt;
+      else if (input.backward) speed -= BRAKE * dt;
+      else {
+        if (speed > 0) speed = Math.max(0, speed - FRICTION*dt);
+        else speed = Math.min(0, speed + FRICTION*dt);
+      }
+      speed = Math.max(-MAX_SPEED*0.5, Math.min(MAX_SPEED, speed));
+      var turnDir = 0;
+      if (input.left) turnDir += 1;
+      if (input.right) turnDir -= 1;
+      var speedRatio = Math.min(1, Math.abs(speed)/MAX_SPEED);
+      car.rotation.y += turnDir * TURN_RATE * dt * (0.35 + 0.65*speedRatio) * (speed < 0 ? -1 : 1);
+    } else {
+      speed = speed > 0 ? Math.max(0, speed - FRICTION*2*dt) : Math.min(0, speed + FRICTION*2*dt);
+    }
+    forwardVec.set(0,0,1).applyQuaternion(car.quaternion);
+    car.position.addScaledVector(forwardVec, speed*dt);
+    enforceTrackBounds();
+    speedEl.textContent = Math.round(Math.abs(speed) * 6);
+  }
+
+  // Which city (if any) is the car in? Drives the location readout
+  // and which section the page view scrolls to.
+  function updateLocation(){
+    var city = null;
+    for (var i=0;i<CITY_DEFS.length;i++){
+      if (car.position.distanceTo(CITY_DEFS[i].center) < 70){ city = CITY_DEFS[i].key; break; }
+    }
+    if (city !== currentCity){
+      currentCity = city;
+      locEl.textContent = city ? SECTION_BY_KEY[city].label + ' city' :
+        (car.position.length() < 40 ? 'Town square' : 'On the road');
+      if (city) toast('Welcome to ' + SECTION_BY_KEY[city].label);
+    } else if (!city){
+      var l = car.position.length() < 40 ? 'Town square' : 'On the road';
+      if (locEl.textContent !== l) locEl.textContent = l;
+    }
+  }
+
+  function updateNearestStation(){
+    var best = null, bestDist = Infinity;
+    stationMeshes.forEach(function(s){
+      var d = car.position.distanceTo(s.position);
+      if (d < s.triggerRadius && d < bestDist){ best = s; bestDist = d; }
+    });
+    nearestStation = best;
+    var ready = !!(best && !openOverlay);
+    $('btn-interact').classList.toggle('ready', ready);
+    if (ready){
+      promptTextEl.textContent = 'Explore ' + SECTION_BY_KEY[best.key].label;
+      promptEl.classList.add('show');
+    } else {
+      promptEl.classList.remove('show');
+    }
+  }
+
+  tryInteract = function(){
+    if (openOverlay || !nearestStation) return;
+    openPanel(nearestStation.key);
+  };
+
+  function placeCarAt(pt, nextPt){
+    car.position.set(pt.x, 0, pt.z);
+    car.rotation.y = Math.atan2(nextPt.x - pt.x, nextPt.z - pt.z);
+    speed = 0;
+    lookYaw = 0; lookPitch = 0;
+    var desired = camOffset.clone().applyQuaternion(car.quaternion).add(car.position);
+    camera.position.copy(desired);
+  }
+
+  teleportTo = function(key){
+    var cd = null;
+    CITY_DEFS.forEach(function(c){ if (c.key === key) cd = c; });
+    if (!cd) return;
+    closeOverlay();
+    var pts = cd.road.centerPts, n = pts.length;
+    // drop the car on the road right beside the shop
+    var i = (cd.stationIdx - 2 + n) % n;
+    placeCarAt(pts[i], pts[(i+1) % n]);
+    toast('Fast travel → ' + SECTION_BY_KEY[key].label);
+  };
+
+  resetCar = function(){
+    closeOverlay();
+    placeCarAt(hubPtsRef[0], hubPtsRef[1]);
+    toast('Back at the town square');
+  };
+
+  function updateCamera(dt){
+    if (!isDragging){
+      lookYaw = THREE.MathUtils.lerp(lookYaw, 0, 1 - Math.pow(0.0005, dt));
+      lookPitch = THREE.MathUtils.lerp(lookPitch, 0, 1 - Math.pow(0.0005, dt));
+    }
+    var lookEuler = new THREE.Euler(lookPitch, lookYaw, 0, 'YXZ');
+    var lookQuat = new THREE.Quaternion().setFromEuler(lookEuler);
+    var desired = camOffset.clone()
+      .applyQuaternion(lookQuat)
+      .applyQuaternion(car.quaternion)
+      .add(car.position);
+    camera.position.lerp(desired, 1 - Math.pow(0.001, dt));
+    camTarget.copy(car.position).add(new THREE.Vector3(0,1.2,0));
+    camera.lookAt(camTarget);
+  }
+
+  function drawMinimap(){
+    var w = mmCanvas.width, h = mmCanvas.height;
+    var k = MM_SCALE;
+    mmCtx.clearRect(0,0,w,h);
+    var cx = w/2, cy = h/2;
+    mmCtx.strokeStyle = 'rgba(255,207,138,0.5)';
+    mmCtx.lineWidth = 3;
+    roads.forEach(function(road){
+      mmCtx.beginPath();
+      for (var i=0;i<road.centerPts.length;i++){
+        var mx = cx + road.centerPts[i].x*k;
+        var mz = cy + road.centerPts[i].z*k;
+        if (i===0) mmCtx.moveTo(mx,mz); else mmCtx.lineTo(mx,mz);
+      }
+      if (road.closed) mmCtx.closePath();
+      mmCtx.stroke();
+    });
+    mmCtx.font = '700 18px JetBrains Mono, monospace';
+    mmCtx.textAlign = 'center'; mmCtx.textBaseline = 'middle';
+    stationMeshes.forEach(function(s){
+      var sec = SECTION_BY_KEY[s.key];
+      var mx = cx + s.position.x*k;
+      var mz = cy + s.position.z*k;
+      mmCtx.fillStyle = sec.color;
+      mmCtx.beginPath(); mmCtx.arc(mx, mz, 6, 0, Math.PI*2); mmCtx.fill();
+      var lx = cx + s.cityCenter.x*k, lz = cy + s.cityCenter.z*k;
+      mmCtx.fillText(String(sec.index + 1), lx, lz);
+    });
+    var px = cx + car.position.x*k;
+    var pz = cy + car.position.z*k;
+    mmCtx.save();
+    mmCtx.translate(px,pz);
+    mmCtx.rotate(-car.rotation.y);
+    mmCtx.fillStyle = '#39ff88';
+    mmCtx.beginPath();
+    mmCtx.moveTo(0,10); mmCtx.lineTo(7,-8); mmCtx.lineTo(-7,-8);
+    mmCtx.closePath(); mmCtx.fill();
+    mmCtx.restore();
+  }
+
+  function tick(){
+    requestAnimationFrame(tick);
+    if (!running) return;
+    try {
+      var dt = Math.min(clock.getDelta(), 0.05);
+      var t = clock.elapsedTime;
+      updateCar(dt);
+      updateNearestStation();
+      updateLocation();
+      updateCamera(dt);
+      // gentle bob on shop labels so they read as interactive
+      stationMeshes.forEach(function(s, i){
+        s.label.position.y = 6.6 + Math.sin(t*2 + i) * 0.18;
+        s.ring.material.opacity = (s === nearestStation) ? 1 : 0.55 + Math.sin(t*3 + i)*0.2;
+      });
+      drawMinimap();
+      renderer.render(scene, camera);
+    } catch(e){
+      running = false;
+      showFatalError(e.message || 'render loop error');
+    }
+  }
+  tick();
+
+  function initWorld(){
+    if (worldBuilt) return;
+    // ---- Town square: a small roundabout hub at the origin, with ----
+    // ---- a road spoking out to each of four separate cities.     ----
+    var HUB_RADIUS = 24, HUB_SEGMENTS = 48;
+    var hubPts = [];
+    for (var hi=0; hi<HUB_SEGMENTS; hi++){
+      var a = (hi/HUB_SEGMENTS) * Math.PI * 2;
+      hubPts.push(new THREE.Vector3(Math.cos(a)*HUB_RADIUS, 0, Math.sin(a)*HUB_RADIUS));
+    }
+    hubPtsRef = hubPts;
+    var hubRoad = { key:'hub', centerPts: hubPts, normals: computeNormals(hubPts, true), closed: true };
+
+    function nearestPointIndexIn(pts, guess){
+      var best = 0, bestD = Infinity;
+      for (var i=0;i<pts.length;i++){
+        var dd = pts[i].distanceTo(guess);
+        if (dd < bestD){ bestD = dd; best = i; }
+      }
+      return best;
+    }
+    function nearestPointIn(pts, guess){ return pts[nearestPointIndexIn(pts, guess)].clone(); }
+
+    // Every city is the same rounded-rectangle-with-chicane loop,
+    // scaled and recentered — a real loop to drive around.
+    function makeCityLoopPoints(center, scale, pointCount){
+      var control = [
+        new THREE.Vector3(-32, 0, -18), new THREE.Vector3(  0, 0, -18), new THREE.Vector3( 30, 0, -18),
+        new THREE.Vector3( 44, 0,  -9), new THREE.Vector3( 44, 0,   9), new THREE.Vector3( 30, 0,  18),
+        new THREE.Vector3( 10, 0,  18), new THREE.Vector3(  5, 0,   8), new THREE.Vector3( -5, 0,   8),
+        new THREE.Vector3(-12, 0,  18), new THREE.Vector3(-32, 0,  18), new THREE.Vector3(-46, 0,   9),
+        new THREE.Vector3(-46, 0,  -9)
+      ].map(function(p){ return p.clone().multiplyScalar(scale).add(center); });
+      var curve = new THREE.CatmullRomCurve3(control, true, 'catmullrom', 0.55);
+      return curve.getSpacedPoints(pointCount);
+    }
+
+    var HUB_PALETTE = ['#5a5850','#6f6c60','#4a4740','#807c6e'];
+    CITY_DEFS = [
+      { key:"skills",     center: new THREE.Vector3(0,0,-140),  color: 0xffb84d,
+        palette: ['#a3652f','#c98a45','#8a5225','#d9a05c','#6b3d18','#b87a3a'] },
+      { key:"projects",   center: new THREE.Vector3(140,0,0),   color: 0x4da6ff,
+        palette: ['#3d5a80','#5a7ba0','#2f4761','#6f8db3','#1f3350','#4d6d8f'] },
+      { key:"experience", center: new THREE.Vector3(0,0,140),   color: 0xff6b9d,
+        palette: ['#8a4a63','#a85e7d','#6b3548','#c47a98','#4f2536','#96567a'] },
+      { key:"contact",    center: new THREE.Vector3(-140,0,0),  color: 0xa685ff,
+        palette: ['#5a4a8a','#7060a8','#3f3366','#8f7ac4','#2b2347','#6c5a9e'] }
+    ];
+
+    var spokeRoads = [];
+    CITY_DEFS.forEach(function(cd){
+      var cityPts = makeCityLoopPoints(cd.center, 0.9, 220);
+      cd.road = { key: cd.key + 'Loop', centerPts: cityPts, normals: computeNormals(cityPts, true), closed: true };
+      var hubExit = nearestPointIn(hubPts, cd.center);
+      var cityEntry = nearestPointIn(cityPts, new THREE.Vector3(0,0,0));
+      var spokeCurve = new THREE.CatmullRomCurve3([hubExit, cityEntry], false, 'catmullrom', 0.5);
+      var spokePts = spokeCurve.getSpacedPoints(70);
+      spokeRoads.push({ key: cd.key + 'Spoke', centerPts: spokePts, normals: computeNormals(spokePts, false), closed: false });
+    });
+
+    roads = [hubRoad].concat(spokeRoads, CITY_DEFS.map(function(cd){ return cd.road; }));
+    allPts = []; allNormals = [];
+    roads.forEach(function(r){ allPts = allPts.concat(r.centerPts); allNormals = allNormals.concat(r.normals); });
+
+    ROAD_HALF = 6; CURB_WIDTH = 1.0; SIDEWALK_WIDTH = 3;
+    STREET_EDGE = ROAD_HALF + CURB_WIDTH;
+    SIDEWALK_OUTER = STREET_EDGE + SIDEWALK_WIDTH;
+    CAR_HALF = 1.15;
+    MAX_SPEED = 26; ACCEL = 17; BRAKE = 27; FRICTION = 10; TURN_RATE = 2.4;
+    BOUND_LIMIT = STREET_EDGE - CAR_HALF;
+
+    roads.forEach(buildRoadSurface);
+
+    // ---- One shop per city, on the far side from the hub so ----
+    // ---- arriving means actually driving into the place.     ----
+    CITY_DEFS.forEach(function(cd){
+      var sec = SECTION_BY_KEY[cd.key];
+      var cityPts = cd.road.centerPts;
+      var farGuess = cd.center.clone().add(cd.center.clone().normalize().multiplyScalar(1000));
+      var idx = nearestPointIndexIn(cityPts, farGuess);
+      cd.stationIdx = idx;
+      var pt = cityPts[idx], n = cd.road.normals[idx];
+      // put the shop on the outer side of the loop
+      var outward = pt.clone().sub(cd.center);
+      if (outward.dot(n) < 0) n = n.clone().negate();
+      // shop's front face sits right at the back of the sidewalk, so a car
+      // in the near lane is comfortably inside triggerRadius
+      var pos = pt.clone().add(n.clone().multiplyScalar(SIDEWALK_OUTER + 2.4));
+
+      var group = new THREE.Group();
+      group.position.copy(pos);
+      group.rotation.y = Math.atan2(-n.x, -n.z);   // shopfront faces the road
+
+      var shop = new THREE.Mesh(
+        new THREE.BoxGeometry(3.2, 5.2, 3.2),
+        new THREE.MeshStandardMaterial({ color: cd.color, emissive: cd.color, emissiveIntensity: 0.3, roughness:0.5 })
+      );
+      shop.position.y = 2.6;
+      shop.castShadow = true;
+      group.add(shop);
+
+      var awning = new THREE.Mesh(
+        new THREE.BoxGeometry(3.8, 0.3, 1.2),
+        new THREE.MeshStandardMaterial({ color: cd.color, emissive: cd.color, emissiveIntensity:0.6, roughness:0.4 })
+      );
+      awning.position.set(0, 2.7, 1.9);
+      group.add(awning);
+
+      var ring = new THREE.Mesh(
+        new THREE.TorusGeometry(3.6, 0.15, 8, 32),
+        new THREE.MeshBasicMaterial({ color: cd.color, transparent: true, opacity: 0.8 })
+      );
+      ring.rotation.x = Math.PI/2;
+      ring.position.y = 0.08;
+      group.add(ring);
+
+      var label = makeLabelSprite(sec.label.toUpperCase(), sec.color);
+      label.position.y = 6.6;
+      group.add(label);
+
+      var light = new THREE.PointLight(cd.color, 1.3, 20);
+      light.position.y = 4;
+      group.add(light);
+
+      scene.add(group);
+      stationMeshes.push({ key: cd.key, position: pos, group: group, label: label, ring: ring, cityCenter: cd.center, triggerRadius: 13 });
+    });
+
+    // ---- Buildings + streetlights: neutral around the hub and    ----
+    // ---- along the spokes, themed per city inside each city loop ----
+    populateRoad(hubRoad, 5, 10, 0, 0, null, HUB_PALETTE, 0xffcf8a);
+    spokeRoads.forEach(function(r){ populateRoad(r, 9, 18, 6, 6, null, HUB_PALETTE, 0xffcf8a); });
+    CITY_DEFS.forEach(function(cd){
+      var n = cd.road.centerPts.length;
+      populateRoad(cd.road, 8, 16, 0, 0, function(i){
+        return Math.min(Math.abs(i - cd.stationIdx), n - Math.abs(i - cd.stationIdx)) < 14;
+      }, cd.palette, cd.color);
+
+      // faint tinted ground disc so each city reads as its own place
+      var tint = new THREE.Mesh(
+        new THREE.CircleGeometry(85, 32),
+        new THREE.MeshBasicMaterial({ color: cd.color, transparent:true, opacity:0.1, depthWrite:false })
+      );
+      tint.rotation.x = -Math.PI/2;
+      tint.position.set(cd.center.x, 0.015, cd.center.z);
+      scene.add(tint);
+    });
+
+    // ---- Park + fountain in the town square ----
+    var treesPlaced = 0, attempts = 0;
+    while (treesPlaced < 16 && attempts < 500){
+      attempts++;
+      var ringMax = HUB_RADIUS - SIDEWALK_OUTER - 2;
+      var p = new THREE.Vector3((Math.random()-0.5)*2*ringMax, 0, (Math.random()-0.5)*2*ringMax);
+      if (p.length() < ringMax && p.length() > 6){ makeTree(p); treesPlaced++; }
+    }
+
+    var plazaBase = new THREE.Mesh(new THREE.CylinderGeometry(4.5,4.5,0.15,24), new THREE.MeshStandardMaterial({ color:0x6a6558, roughness:0.9 }));
+    plazaBase.position.set(0, 0.08, 0);
+    plazaBase.receiveShadow = true;
+    scene.add(plazaBase);
+
+    var fountainRim = new THREE.Mesh(new THREE.CylinderGeometry(1.6,1.7,0.5,20), new THREE.MeshStandardMaterial({ color:0x8a8474, roughness:0.8 }));
+    fountainRim.position.set(0, 0.33, 0);
+    fountainRim.castShadow = true;
+    scene.add(fountainRim);
+
+    var fountainWater = new THREE.Mesh(new THREE.CylinderGeometry(1.3,1.3,0.45,20), new THREE.MeshStandardMaterial({ color:0x3a6d8f, emissive:0x1c4a63, emissiveIntensity:0.4, roughness:0.3 }));
+    fountainWater.position.set(0, 0.4, 0);
+    scene.add(fountainWater);
+
+    var fountainSpout = new THREE.Mesh(new THREE.ConeGeometry(0.25,1.0,10), new THREE.MeshStandardMaterial({ color:0x8a8474, roughness:0.8 }));
+    fountainSpout.position.set(0, 1.1, 0);
+    scene.add(fountainSpout);
+
+    var fountainLight = new THREE.PointLight(0x8fd6ff, 0.6, 10);
+    fountainLight.position.set(0, 1.5, 0);
+    scene.add(fountainLight);
+
+    // ---- Signposts at each hub exit, pointing to the city ----
+    CITY_DEFS.forEach(function(cd){
+      var sec = SECTION_BY_KEY[cd.key];
+      var dir = cd.center.clone().normalize();
+      var side = new THREE.Vector3(-dir.z, 0, dir.x);
+      var at = dir.clone().multiplyScalar(HUB_RADIUS + 16).addScaledVector(side, STREET_EDGE + 1.2);
+      var post = new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.07,3,6), new THREE.MeshStandardMaterial({ color:0x2a2a2e }));
+      post.position.set(at.x, 1.5, at.z);
+      scene.add(post);
+      var sign = makeLabelSprite((sec.index+1) + ' ' + sec.label.toUpperCase() + ' →', sec.color);
+      sign.scale.set(5, 1.25, 1);
+      sign.position.set(at.x, 3.3, at.z);
+      scene.add(sign);
+    });
+
+    // ---- Traffic light prop beside the hub plaza ----
+    if (ASSETS.trafficLight){
+      var tlModel = ASSETS.trafficLight.clone(true);
+      tlModel.position.set(0,0,0);
+      tlModel.quaternion.identity();
+      tlModel.scale.set(1,1,1);
+      tlModel.updateMatrixWorld(true);
+      var tlBox = new THREE.Box3().setFromObject(tlModel);
+      var tlSize = tlBox.getSize(new THREE.Vector3());
+      var tlCenter = tlBox.getCenter(new THREE.Vector3());
+      var tlScale = 7 / tlSize.y;
+      tlModel.position.x -= tlCenter.x;
+      tlModel.position.z -= tlCenter.z;
+      tlModel.position.y -= tlBox.min.y;
+      tlModel.scale.setScalar(tlScale);
+      tlModel.position.multiplyScalar(tlScale);
+      var tlSpot = hubPts[0].clone().addScaledVector(new THREE.Vector3(hubPts[0].x, 0, hubPts[0].z).normalize(), SIDEWALK_OUTER + 6);
+      tlModel.position.x += tlSpot.x;
+      tlModel.position.z += tlSpot.z;
+      tlModel.traverse(function(o){ if (o.isMesh){ o.castShadow = true; o.receiveShadow = true; } });
+      scene.add(tlModel);
+    }
+
+    // ---- Car ----
+    car = new THREE.Group();
+    if (ASSETS.car){
+      var carModel = ASSETS.car.clone(true);
+      carModel.position.set(0,0,0);
+      carModel.quaternion.identity();
+      carModel.scale.set(1,1,1);
+      carModel.updateMatrixWorld(true);
+      var rawSize = new THREE.Box3().setFromObject(carModel).getSize(new THREE.Vector3());
+      if (rawSize.x > rawSize.z) carModel.rotation.y = Math.PI/2;
+      carModel.updateMatrixWorld(true);
+      var normSize = new THREE.Box3().setFromObject(carModel).getSize(new THREE.Vector3());
+      var carScale = 4.4 / normSize.z;
+      carModel.scale.setScalar(carScale);
+      carModel.updateMatrixWorld(true);
+      var carBox = new THREE.Box3().setFromObject(carModel);
+      var carCenter = carBox.getCenter(new THREE.Vector3());
+      carModel.position.x -= carCenter.x;
+      carModel.position.z -= carCenter.z;
+      carModel.position.y -= carBox.min.y;
+      carModel.rotation.y += Math.PI;
+      carModel.traverse(function(o){ if (o.isMesh){ o.castShadow = true; o.receiveShadow = true; } });
+      car.add(carModel);
+    } else {
+      var body = new THREE.Mesh(
+        new THREE.BoxGeometry(2.2, 0.9, 4.2),
+        new THREE.MeshStandardMaterial({ color: 0x39ff88, emissive: 0x0c3324, emissiveIntensity:0.4, roughness:0.35, metalness:0.3 })
+      );
+      body.position.y = 0.75; body.castShadow = true; car.add(body);
+      var cabin = new THREE.Mesh(
+        new THREE.BoxGeometry(1.5, 0.6, 2.0),
+        new THREE.MeshStandardMaterial({ color: 0x0b1613, roughness:0.2, metalness:0.6 })
+      );
+      cabin.position.set(0, 1.35, -0.2); cabin.castShadow = true; car.add(cabin);
+      var wheelGeo = new THREE.CylinderGeometry(0.45, 0.45, 0.4, 16);
+      var wheelMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness:0.9 });
+      [[-1.15,0.45,1.4],[1.15,0.45,1.4],[-1.15,0.45,-1.4],[1.15,0.45,-1.4]].forEach(function(p){
+        var w = new THREE.Mesh(wheelGeo, wheelMat);
+        w.rotation.z = Math.PI/2; w.position.set(p[0],p[1],p[2]); w.castShadow = true; car.add(w);
+      });
+      var headlightGeo = new THREE.SphereGeometry(0.14, 8, 8);
+      var headlightMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+      [[-0.7,0.75,2.05],[0.7,0.75,2.05]].forEach(function(p){
+        var h = new THREE.Mesh(headlightGeo, headlightMat);
+        h.position.set(p[0],p[1],p[2]); car.add(h);
+      });
+    }
+    // headlight beam so the road ahead is readable at dusk
+    var beam = new THREE.SpotLight(0xfff1d6, 1.4, 38, 0.5, 0.6, 1);
+    beam.position.set(0, 1.0, 2.0);
+    beam.target.position.set(0, 0, 14);
+    car.add(beam); car.add(beam.target);
+
+    forwardVec = new THREE.Vector3();
+    camOffset = new THREE.Vector3(0, 4.2, -8.5);
+    camTarget = new THREE.Vector3();
+    scene.add(car);
+    placeCarAt(hubPts[0], hubPts[1]);
+
+    // ---- Touch controls ----
+    function bindHold(id, onFlag){
+      var el = $(id);
+      var on = function(ev){ ev.preventDefault(); if (!openOverlay){ onFlag(true); el.classList.add('held'); } };
+      var off = function(ev){ ev.preventDefault(); onFlag(false); el.classList.remove('held'); };
+      el.addEventListener('pointerdown', on);
+      el.addEventListener('pointerup', off);
+      el.addEventListener('pointercancel', off);
+      el.addEventListener('pointerleave', off);
+      el.addEventListener('contextmenu', function(ev){ ev.preventDefault(); });
+    }
+    bindHold('btn-accel', function(v){ input.forward = v; });
+    bindHold('btn-brake', function(v){ input.backward = v; });
+    bindHold('btn-left', function(v){ input.left = v; });
+    bindHold('btn-right', function(v){ input.right = v; });
+    $('btn-interact').addEventListener('click', function(){ tryInteract(); });
+    var coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+    if (coarse || 'ontouchstart' in window) $('touch-controls').classList.add('active');
+
+    // ---- HUD wiring ----
+    promptEl = $('station-prompt');
+    promptTextEl = $('station-prompt-text');
+    promptEl.addEventListener('click', function(){ tryInteract(); });
+    $('hud-reset-btn').addEventListener('click', function(){ resetCar(); });
+    $('fast-travel').innerHTML = SECTIONS.map(function(s, i){
+      return '<button data-go="' + s.key + '" style="color:' + s.color + '" title="Fast travel to ' + s.label + ' (' + (i+1) + ')">' +
+        '<i style="background:' + s.color + '"></i><span style="color:var(--ink)">' + s.label + '</span><kbd>' + (i+1) + '</kbd></button>';
+    }).join('');
+    $('fast-travel').addEventListener('click', function(e){
+      var b = e.target.closest('[data-go]'); if (b){ teleportTo(b.getAttribute('data-go')); b.blur(); }
+    });
+
+    mmCanvas = $('minimap');
+    mmCtx = mmCanvas.getContext('2d');
+    MM_SCALE = 0.62;   // world units → minimap px (canvas is 272px, drawn at 136px)
+
+    clock = new THREE.Clock();
+    worldBuilt = true;
+  }
+
+  var startBtn = $('start-btn');
+  startBtn.addEventListener('click', function(){
+    startBtn.disabled = true;
+    $('fatal-error').style.display = 'none';
+    function go(){
+      startBtn.textContent = 'Building town…';
+      setTimeout(function(){
+        try {
+          initWorld();
+          $('intro').style.display = 'none';
+          $('hud').classList.add('active');
+          running = true;
+          clock.start();
+          if (SECTION_BY_KEY[initialHash]){
+            teleportTo(initialHash);
+            setTimeout(function(){ openPanel(initialHash); }, 400);
+          } else {
+            toast('Pick a road — or press 1–4 to fast travel');
+          }
+        } catch(e){
+          showFatalError(e.message || String(e));
+        }
+      }, 30);
+    }
+    if (assetsSettled){
+      go();
+    } else {
+      startBtn.textContent = 'Loading assets…';
+      var waitTimer = setInterval(function(){
+        if (assetsSettled){ clearInterval(waitTimer); go(); }
+      }, 100);
+    }
+  });
+
+})();
+</script>
+</body>
+</html>
