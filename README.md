@@ -56,6 +56,7 @@ window.PORTFOLIO = {
 | Handbrake / drift         | `Space`                     | **DRIFT**                |
 | Change car                | `C` (or pick on the intro)  | ⇄ Car                    |
 | Engine sound on / off     | `M`                         | ♪ Sound                  |
+| Time of day               | `T`                         | ☀ button                 |
 | Look around               | drag mouse                  | drag                     |
 | Enter shop                | `E` or `Enter`              | **ENTER** (lights up)    |
 | Fast travel to a city     | `1`–`4`                     | chips at top-left        |
@@ -120,6 +121,21 @@ The page loads only the `scene.web.gltf` files, which use small textures from `t
 - **Collision**: the car stays on the union of all road surfaces, with its distance from the nearest centre-line limited so the wheels stay off the curb. Hitting the curb removes the part of the velocity going into it, so the car glances off and slides along. A hard hit shakes the camera.
 - **Shops**: a shop opens its panel when the car is within 13 units of it.
 - **Debug view**: add `?debug` to the URL, then use `__town.topDown(x, z, height)` in the console for a bird's-eye view of any area. `__town.follow()` returns to the chase camera.
+
+### Day and night (`applySky` in `index.html`)
+
+The sky follows **the visitor's real local time**. Someone in London at 4:30 pm in November sees the sunset, someone in India at 10 pm sees a starry night, and someone in California at 8 am sees morning.
+
+- **Sun position**: computed with NOAA's solar-position approximation from the visitor's date and clock. Longitude is estimated from the timezone offset (15° per hour). Latitude is a rough guess from the timezone's region (e.g. Europe ≈ 50°N, Australia ≈ 30°S). **No location permission is asked for.** Results match reference values: for example, London at noon on the winter solstice gives 15.1° elevation with the sun due south. North is −z and east is +x, so the sun rises over the Projects city side and sets over Contact.
+- **What follows the sun**:
+  - A shader sky dome (gradient, sun disc and glow, orange horizon at dusk), stars and a moon.
+  - Fog colour and density.
+  - Sunlight direction and colour, so shadows swing round through the day. A dim bluish moonlight takes over at night.
+  - Ambient and sky light levels.
+  - Window lights, shopfronts, street lamps and car headlights, which turn on as it gets dark.
+- **Updates**: the sky re-checks the clock every 30 s and blends smoothly, so a visitor who stays through sunset watches it happen.
+- **Override**: **T** or the ☀ button cycles *Real time → Day → Sunset → Night*. The choice is remembered.
+- **Debug**: with `?debug`, `__town.sky(elevation, azimuth)` forces any sun position, and `__town.solar(isoDate, lat, lon)` exposes the formula.
 
 ### How the driving works (`physicsStep` / `updateCar` in `index.html`)
 

@@ -355,7 +355,7 @@
   <div class="kicker">// portfolio town</div>
   <h1 id="intro-name">Shashank Hosamani</h1>
   <div class="role" id="intro-role"></div>
-  <p class="lede" id="intro-lede">Drive a car through a small town at dusk. Four roads lead out of the town square, each to its own city — and each city is a section of my portfolio.</p>
+  <p class="lede" id="intro-lede">Drive a car through a small town where the sun, sky and street lights follow your real local time. Four roads lead out of the town square, each to its own city — and each city is a section of my portfolio.</p>
   <div class="city-legend">
     <span><i style="background:var(--blue)"></i>Projects · east</span>
     <span><i style="background:var(--amber)"></i>Skills · north</span>
@@ -382,6 +382,7 @@
     <span><kbd>Space</kbd> handbrake / drift</span>
     <span><kbd>E</kbd> enter a shop</span>
     <span><kbd>C</kbd> change car</span>
+    <span><kbd>T</kbd> time of day</span>
     <span><kbd>1</kbd>–<kbd>4</kbd> fast travel</span>
     <span><kbd>H</kbd> help</span>
     <span>drag to look around</span>
@@ -407,6 +408,7 @@
       <button class="btn small" id="hud-reset-btn" title="Back to the town square (R)">⟲ Reset</button>
       <button class="btn small" id="hud-car-btn" title="Change car (C)">⇄ Car</button>
       <button class="btn small" id="hud-sound-btn" title="Engine sound (M)">♪ Sound on</button>
+      <button class="btn small" id="hud-sky-btn" title="Sky follows your local time — click (or T) to force day / sunset / night">☀ Real time</button>
     </div>
   </div>
 
@@ -465,6 +467,7 @@
       <dt><kbd>R</kbd></dt><dd>Reset to the town square</dd>
       <dt><kbd>C</kbd></dt><dd>Change car (7 to choose from)</dd>
       <dt><kbd>M</kbd></dt><dd>Engine sound on / off</dd>
+      <dt><kbd>T</kbd></dt><dd>Sky: real local time → day → sunset → night</dd>
       <dt><kbd>L</kbd></dt><dd>Read everything as a normal page</dd>
       <dt><kbd>H</kbd> / <kbd>?</kbd></dt><dd>This help</dd>
       <dt><kbd>Esc</kbd></dt><dd>Close any window</dd>
@@ -789,7 +792,7 @@
   // These are assigned once the world exists.
   var running = false, renderer = null, currentCity = null;
   var teleportTo = function(){}, resetCar = function(){}, tryInteract = function(){};
-  var changeCar = function(){}, toggleSound = function(){};
+  var changeCar = function(){}, toggleSound = function(){}, changeSky = function(){};
 
   window.addEventListener('keydown', function(e){
     var k = e.key.toLowerCase();
@@ -814,6 +817,7 @@
       case ' ': input.handbrake = true; e.preventDefault(); break;
       case 'c': changeCar(1); break;
       case 'm': toggleSound(); break;
+      case 't': changeSky(); break;
       case '1': case '2': case '3': case '4': teleportTo(SECTIONS[+k - 1].key); break;
     }
   });
@@ -980,15 +984,219 @@
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
 
-  scene.add(new THREE.AmbientLight(0x30405a, 0.9));
-  scene.add(new THREE.HemisphereLight(0x6d7fa8, 0x1d2016, 0.55));
+  var ambient = new THREE.AmbientLight(0x30405a, 0.9);
+  var hemi = new THREE.HemisphereLight(0x6d7fa8, 0x1d2016, 0.55);
+  scene.add(ambient); scene.add(hemi);
   var sun = new THREE.DirectionalLight(0xffb37a, 0.55);
   sun.position.set(-60, 40, -28);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(1024,1024);
-  sun.shadow.camera.left = -100; sun.shadow.camera.right = 100;
-  sun.shadow.camera.top = 100; sun.shadow.camera.bottom = -100;
+  sun.shadow.mapSize.set(2048,2048);
+  sun.shadow.camera.left = -120; sun.shadow.camera.right = 120;
+  sun.shadow.camera.top = 120; sun.shadow.camera.bottom = -120;
+  sun.shadow.camera.far = 400;
+  sun.shadow.bias = -0.0006;
   scene.add(sun);
+  var carBeam = null;
+  // ---------------------------------------------------------------
+  // Day & night that follow the visitor's real local time.
+  //
+  // The sun's elevation/azimuth come from a standard solar-position
+  // formula (NOAA's approximation) using the visitor's clock and date.
+  // Longitude is estimated from the timezone offset (15° per hour) and
+  // latitude from the timezone's hemisphere, so no location permission
+  // is ever requested. Everything — sky gradient, sun/moon, stars,
+  // fog, sunlight direction and colour (shadows move through the day),
+  // window lights, street lamps, headlights — is driven from that.
+  // World orientation: −z is north, +x is east.
+  // ---------------------------------------------------------------
+  function smooth(a, b, x){ var t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t*t*(3 - 2*t); }
+
+  var GEO = (function(){
+    var tz = '', lat = 28;
+    try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch(e){}
+    if (/^(Australia|Antarctica)|Pacific\/(Auckland|Fiji|Chatham)|America\/(Sao_Paulo|Argentina|Santiago|Montevideo|Asuncion|La_Paz|Lima)|Africa\/(Johannesburg|Maputo|Harare|Windhoek|Lusaka)|Indian\/(Mauritius|Reunion)/.test(tz)) lat = -30;
+    else if (/^Europe|^Atlantic\/Reykjavik|America\/(Anchorage|Edmonton|Winnipeg|Toronto|Vancouver|Montreal|Halifax)/.test(tz)) lat = 50;
+    else if (/^America\/(New_York|Chicago|Denver|Los_Angeles|Phoenix|Detroit)|Asia\/(Tokyo|Seoul|Shanghai|Beijing|Tehran)/.test(tz)) lat = 38;
+    else if (/^Asia\/(Singapore|Jakarta|Kuala_Lumpur|Manila)|America\/(Bogota|Caracas|Panama)|Africa\/(Nairobi|Lagos|Accra)/.test(tz)) lat = 3;
+    return { tz: tz, lat: lat };
+  })();
+
+  function solarPosition(date, latDeg, lonDeg){
+    var rad = Math.PI/180;
+    var start = Date.UTC(date.getUTCFullYear(), 0, 0);
+    var doy = Math.floor((date.getTime() - start) / 864e5);
+    var hr = date.getUTCHours() + date.getUTCMinutes()/60 + date.getUTCSeconds()/3600;
+    var g = 2*Math.PI/365 * (doy - 1 + (hr - 12)/24);
+    var eqt = 229.18*(0.000075 + 0.001868*Math.cos(g) - 0.032077*Math.sin(g) - 0.014615*Math.cos(2*g) - 0.040849*Math.sin(2*g));
+    var decl = 0.006918 - 0.399912*Math.cos(g) + 0.070257*Math.sin(g) - 0.006758*Math.cos(2*g)
+             + 0.000907*Math.sin(2*g) - 0.002697*Math.cos(3*g) + 0.00148*Math.sin(3*g);
+    var tst = hr*60 + eqt + 4*lonDeg;
+    var ha = (tst/4 - 180) * rad, lat = latDeg * rad;
+    var cosZ = Math.sin(lat)*Math.sin(decl) + Math.cos(lat)*Math.cos(decl)*Math.cos(ha);
+    var zen = Math.acos(Math.max(-1, Math.min(1, cosZ)));
+    var az = Math.atan2(Math.sin(ha), Math.cos(ha)*Math.sin(lat) - Math.tan(decl)*Math.cos(lat)) + Math.PI;
+    return { el: 90 - zen/rad, az: az/rad };   // az: degrees clockwise from north
+  }
+
+  var SKY_MODES = [
+    { id:'auto',   label:'Real time' },
+    { id:'day',    label:'Day',    el: 52,  az: 160 },
+    { id:'sunset', label:'Sunset', el: 1.5, az: 290 },
+    { id:'night',  label:'Night',  el: -32, az: 20 }
+  ];
+  var skyMode = 'auto';
+  try { var sm = localStorage.getItem('town.sky'); if (SKY_MODES.some(function(m){ return m.id === sm; })) skyMode = sm; } catch(e){}
+
+  var skyTarget = { el: 0, az: 0 }, skyCur = null, skyClockTimer = 0;
+  function computeSkyTarget(){
+    var m = SKY_MODES.filter(function(x){ return x.id === skyMode; })[0];
+    if (m.id !== 'auto'){ skyTarget.el = m.el; skyTarget.az = m.az; return; }
+    var now = new Date();
+    var lon = -now.getTimezoneOffset() / 4;      // 15° per hour of UTC offset
+    var p = solarPosition(now, GEO.lat, lon);
+    skyTarget.el = p.el; skyTarget.az = p.az;
+  }
+
+  // sky dome: gradient + sun disc/glow + moon, follows the camera
+  var skyUniforms = {
+    top: { value: new THREE.Color() }, horizon: { value: new THREE.Color() }, below: { value: new THREE.Color() },
+    sunDir: { value: new THREE.Vector3(0,1,0) }, sunColor: { value: new THREE.Color() }, sunVis: { value: 1 },
+    moonDir: { value: new THREE.Vector3(0,1,0) }, moonVis: { value: 0 }
+  };
+  var skyDome = new THREE.Mesh(new THREE.SphereGeometry(600, 32, 20), new THREE.ShaderMaterial({
+    uniforms: skyUniforms, side: THREE.BackSide, depthWrite: false, fog: false,
+    vertexShader: 'varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: [
+      'uniform vec3 top, horizon, below, sunColor; uniform vec3 sunDir, moonDir; uniform float sunVis, moonVis;',
+      'varying vec3 vDir;',
+      'void main(){',
+      '  vec3 d = normalize(vDir); float h = d.y;',
+      '  vec3 col = h > 0.0 ? mix(horizon, top, pow(h, 0.5)) : mix(horizon, below, min(1.0, -h*5.0));',
+      '  float s = max(dot(d, sunDir), 0.0);',
+      '  col += sunColor * (smoothstep(0.9993, 0.9997, s) * 2.0 + pow(s, 14.0) * 0.35 + pow(s, 3.0) * 0.08) * sunVis;',
+      '  float m = max(dot(d, moonDir), 0.0);',
+      '  col += vec3(0.85, 0.88, 1.0) * (smoothstep(0.9995, 0.9998, m) * 1.2 + pow(m, 60.0) * 0.12) * moonVis;',
+      '  gl_FragColor = vec4(col, 1.0);',
+      '}'
+    ].join('\n')
+  }));
+  skyDome.renderOrder = -10;
+  skyDome.frustumCulled = false;
+  scene.add(skyDome);
+
+  var stars = (function(){
+    var n = 1400, pos = new Float32Array(n*3);
+    for (var i=0;i<n;i++){
+      var u = Math.random(), v = Math.random()*0.92 + 0.06;      // upper hemisphere
+      var th = u*Math.PI*2, y = v, r = Math.sqrt(1 - y*y);
+      pos[i*3] = Math.cos(th)*r*560; pos[i*3+1] = y*560; pos[i*3+2] = Math.sin(th)*r*560;
+    }
+    var g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    var pts = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffffff, size: 1.6, sizeAttenuation: false, transparent: true, opacity: 0, depthWrite: false, fog: false }));
+    pts.renderOrder = -9; pts.frustumCulled = false;
+    scene.add(pts);
+    return pts;
+  })();
+
+  var C = function(h){ return new THREE.Color(h); };
+  var SKY = {
+    nightTop: C(0x04070f), dayTop: C(0x3a7bd0), duskTop: C(0x27315e),
+    nightHor: C(0x0f1526), dayHor: C(0xb7d3ec), duskHor: C(0xee8a58),
+    sunLow: C(0xffa865), sunHigh: C(0xfff4e2), moon: C(0x9fb4ff),
+    ambNight: C(0x30405a), ambDay: C(0xa9b9cd),
+    hemiSkyNight: C(0x6d7fa8), hemiSkyDay: C(0xcfe2ff), hemiGndNight: C(0x1d2016), hemiGndDay: C(0x5d5a46)
+  };
+  var _c1 = new THREE.Color(), _c2 = new THREE.Color();
+  var lightLevel = { windows: 1, lamps: 1 };   // read by later code
+
+  function applySky(el, az){
+    var rad = Math.PI/180;
+    var day = smooth(-4, 12, el);
+    var dusk = smooth(-10, -1, el) * (1 - smooth(5, 18, el));
+    var night = 1 - smooth(-12, -3, el);
+    var sx = Math.sin(az*rad)*Math.cos(el*rad), sy = Math.sin(el*rad), sz = -Math.cos(az*rad)*Math.cos(el*rad);
+    skyUniforms.sunDir.value.set(sx, sy, sz).normalize();
+    var md = new THREE.Vector3(-sx, Math.max(0.45, -sy), -sz).normalize();
+    skyUniforms.moonDir.value.copy(md);
+
+    var top = skyUniforms.top.value, hor = skyUniforms.horizon.value;
+    top.copy(SKY.nightTop).lerp(SKY.dayTop, day).lerp(SKY.duskTop, dusk*0.6);
+    hor.copy(SKY.nightHor).lerp(SKY.dayHor, day).lerp(SKY.duskHor, dusk*0.85);
+    skyUniforms.below.value.copy(hor).multiplyScalar(0.45);
+    skyUniforms.sunColor.value.copy(SKY.sunLow).lerp(SKY.sunHigh, smooth(2, 25, el));
+    skyUniforms.sunVis.value = smooth(-3, 1, el);
+    skyUniforms.moonVis.value = night;
+    stars.material.opacity = night * 0.85;
+
+    scene.background = hor;
+    scene.fog.color.copy(hor);
+    scene.fog.density = 0.006 + (0.0026 - 0.006) * day;
+
+    // key light: the sun by day, a faint moon at night. The light's own
+    // elevation is clamped so low sun doesn't throw endless shadows.
+    var sunI = 1.25*day + 0.45*dusk*(el > -2 ? 1 : 0), moonI = 0.16*night;
+    var useSun = sunI >= moonI;
+    var lx, ly, lz;
+    if (useSun){ var le = Math.max(8, el) * rad; lx = Math.sin(az*rad)*Math.cos(le); ly = Math.sin(le); lz = -Math.cos(az*rad)*Math.cos(le); }
+    else { lx = md.x; ly = md.y; lz = md.z; }
+    sun.position.set(lx*160, ly*160, lz*160);
+    sun.intensity = Math.max(sunI, moonI);
+    sun.color.copy(useSun ? _c1.copy(SKY.sunLow).lerp(SKY.sunHigh, smooth(2, 25, el)) : SKY.moon);
+
+    ambient.color.copy(SKY.ambNight).lerp(SKY.ambDay, day);
+    ambient.intensity = 0.9 + (0.5 - 0.9) * day;
+    hemi.color.copy(SKY.hemiSkyNight).lerp(SKY.hemiSkyDay, day);
+    hemi.groundColor.copy(SKY.hemiGndNight).lerp(SKY.hemiGndDay, day);
+    hemi.intensity = 0.55 + (0.8 - 0.55) * day;
+
+    // people switch lights on as it gets dark
+    lightLevel.windows = 0.07 + 0.93 * (1 - smooth(-3, 9, el));
+    lightLevel.lamps = 1 - smooth(-1, 6, el);
+    if (typeof BLD !== 'undefined' && BLD){
+      Object.keys(BLD.facade).forEach(function(s){ BLD.facade[s].forEach(function(f){ f.mat.emissiveIntensity = f.mat.userData.baseEmissive * lightLevel.windows; }); });
+      BLD.shop.forEach(function(f){ f.mat.emissiveIntensity = 0.9 * (0.35 + 0.65*lightLevel.windows); });
+    }
+    Object.keys(lampMatCache).forEach(function(k){
+      var m = lampMatCache[k];
+      m.bulb.color.copy(_c2.set(+k)).multiplyScalar(0.25 + 0.75*lightLevel.lamps);
+      m.pool.opacity = 0.42 * lightLevel.lamps;
+      m.pool.visible = lightLevel.lamps > 0.02;
+    });
+    if (carBeam) carBeam.intensity = 1.4 * lightLevel.lamps;
+  }
+
+  function skyLabel(){
+    var m = SKY_MODES.filter(function(x){ return x.id === skyMode; })[0];
+    var now = new Date(), hh = String(now.getHours()).padStart(2,'0'), mm = String(now.getMinutes()).padStart(2,'0');
+    var el = skyTarget.el, phase = el > 12 ? 'day' : el > -1 ? (now.getHours() < 12 ? 'sunrise' : 'sunset') : el > -10 ? 'twilight' : 'night';
+    return m.id === 'auto' ? '☀ ' + hh + ':' + mm + ' · ' + phase : '☀ ' + m.label + ' (fixed)';
+  }
+  function updateSky(dt){
+    skyClockTimer -= dt;
+    if (skyClockTimer <= 0){        // real clock: re-check twice a minute
+      computeSkyTarget();
+      skyClockTimer = 30;
+      var btn = $('hud-sky-btn'); if (btn) btn.textContent = skyLabel();
+    }
+    if (!skyCur){ skyCur = { el: skyTarget.el, az: skyTarget.az }; }
+    else {
+      var k = Math.min(1, dt * 1.6);
+      skyCur.el += (skyTarget.el - skyCur.el) * k;
+      var daz = ((skyTarget.az - skyCur.az + 540) % 360) - 180;
+      skyCur.az = (skyCur.az + daz * k + 360) % 360;
+    }
+    skyDome.position.copy(camera.position);
+    stars.position.copy(camera.position);
+    applySky(skyCur.el, skyCur.az);
+  }
+  function cycleSky(){
+    var i = SKY_MODES.map(function(m){ return m.id; }).indexOf(skyMode);
+    skyMode = SKY_MODES[(i + 1) % SKY_MODES.length].id;
+    try { localStorage.setItem('town.sky', skyMode); } catch(e){}
+    skyClockTimer = 0;
+    updateSky(0);
+    toast(skyMode === 'auto' ? 'Sky follows your local time' : 'Sky: ' + SKY_MODES.filter(function(x){ return x.id === skyMode; })[0].label);
+  }
 
   function makeGroundTexture(){
     var size = 512;
@@ -1570,6 +1778,7 @@
           roughness: style === 'glass' ? 0.3 : 0.88, metalness: style === 'glass' ? 0.25 : 0,
           vertexColors: style === 'plaster'
         });
+        mat.userData.baseEmissive = mat.emissiveIntensity;
         return { batch: new GeoBatch(), mat: mat };
       });
     });
@@ -2482,6 +2691,7 @@
       var t = clock.elapsedTime;
       updateTraffic(dt);
       updateCar(dt);
+      updateSky(dt);
       updateNearestStation();
       updateLocation();
       if (!debugCam) updateCamera(dt);
@@ -2508,6 +2718,9 @@
       get car(){ return car; },
       get state(){ return CS; },
       get traffic(){ return traffic; },
+      // force a sun position, e.g. __town.sky(30, 180) for mid-afternoon
+      sky: function(el, az){ skyMode = 'debug'; skyTarget.el = el; skyTarget.az = az; skyCur = null; skyClockTimer = 1e9; updateSky(0); },
+      solar: function(iso, lat, lon){ return solarPosition(new Date(iso), lat, lon); },
       // advance the physics by `sec` seconds of simulated time
       sim: function(sec){ for (var i=0, n=Math.round(sec/STEP); i<n; i++){ updateTraffic(STEP); physicsStep(STEP); } updateGear(1); return { kmh: Math.abs(CS.vF)*3.6, gear: CS.gear, slip: CS.slip, x: car.position.x, z: car.position.z, yaw: car.rotation.y }; },
       input: input,
@@ -2766,7 +2979,7 @@
     car = new THREE.Group();
     installCarRig(CAR_BY_ID[carId]);
     // headlight beam so the road ahead is readable at dusk
-    var beam = new THREE.SpotLight(0xfff1d6, 1.4, 38, 0.5, 0.6, 1);
+    var beam = carBeam = new THREE.SpotLight(0xfff1d6, 1.4, 38, 0.5, 0.6, 1);
     beam.position.set(0, 1.0, 2.0);
     beam.target.position.set(0, 0, 14);
     car.add(beam); car.add(beam.target);
@@ -2807,6 +3020,8 @@
     toggleSound = function(){ startEngineAudio(); setSound(!AUD.on); toast(AUD.on ? 'Sound on' : 'Sound off'); };
     $('hud-car-btn').addEventListener('click', function(e){ changeCar(1); e.currentTarget.blur(); });
     $('hud-sound-btn').addEventListener('click', function(e){ toggleSound(); e.currentTarget.blur(); });
+    changeSky = cycleSky;
+    $('hud-sky-btn').addEventListener('click', function(e){ cycleSky(); e.currentTarget.blur(); });
     setSound(AUD.on);
     $('fast-travel').innerHTML = SECTIONS.map(function(s, i){
       return '<button data-go="' + s.key + '" style="color:' + s.color + '" title="Fast travel to ' + s.label + ' (' + (i+1) + ')">' +
