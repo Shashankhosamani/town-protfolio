@@ -1,0 +1,27 @@
+{
+  "name": "portfolio-town",
+  "version": "1.0.0",
+  "private": true,
+  "description": "An interactive 3D portfolio: drive a little town where every billboard is part of the portfolio.",
+  "scripts": {
+    "dev": "next dev",
+    "prebuild": "node scripts/validate-content.mjs",
+    "build": "next build",
+    "start": "npx serve@14.2.4 out",
+    "typecheck": "tsc --noEmit",
+    "validate-content": "node scripts/validate-content.mjs"
+  },
+  "dependencies": {
+    "next": "16.4.5",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "three": "0.128.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "ajv": "8.17.1",
+    "typescript": "5.9.3"
+  }
+}

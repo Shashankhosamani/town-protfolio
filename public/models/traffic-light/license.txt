@@ -1,0 +1,8 @@
+Model Information:
+* title:	Australian Traffic Light & Pedestrain Light
+* source:	https://sketchfab.com/3d-models/australian-traffic-light-pedestrain-light-72b20af0bca44dfab473cbbd1f0af7a2
+* author:	JoTrain The Aussie 🇦🇺 (https://sketchfab.com/Jotrain)
+
+Model License:
+* license type:	SKETCHFAB Standard (https://sketchfab.com/licenses)
+* requirements:	Under basic restrictions, use worldwide, on all types of media, commercially or not, and in all types of derivative works
