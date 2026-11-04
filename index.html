@@ -74,47 +74,62 @@
   .btn.primary:disabled{ opacity: 0.7; cursor: progress; transform:none; }
   .btn.small{ padding: 6px 10px; font-size: 12px; }
 
-  /* ---------- Intro ---------- */
+  /* ---------- Intro / landing ---------- */
   #intro{
     position:fixed; inset:0; z-index:50;
-    display:flex; flex-direction:column; align-items:center; justify-content:center;
-    background: radial-gradient(ellipse at center, #14182a 0%, #08090f 70%);
-    text-align:center; padding: 24px; overflow-y:auto;
+    display:flex; align-items:center; justify-content:flex-start;
+    background: linear-gradient(90deg, rgba(8,9,15,0.94) 0%, rgba(8,9,15,0.82) 38%, rgba(8,9,15,0.25) 70%, rgba(8,9,15,0.05) 100%);
+    padding: 32px clamp(16px, 5vw, 72px); overflow-y:auto;
+  }
+  #intro.no-3d{ background: radial-gradient(ellipse at center, #14182a 0%, #08090f 70%); justify-content:center; }
+  .intro-card{ width: min(560px, 100%); margin: auto 0; }
+  #intro.no-3d .intro-card{ margin: auto; }
+  @media (max-width: 760px){
+    #intro{ background: linear-gradient(180deg, rgba(8,9,15,0.55) 0%, rgba(8,9,15,0.9) 35%, rgba(8,9,15,0.96) 100%); align-items:flex-start; }
+    .intro-card{ margin-top: 18vh; }
   }
   #intro .kicker{
     font-family: var(--mono); font-size: 13px; letter-spacing: 0.04em;
-    color: var(--accent); margin-bottom: 18px;
+    color: var(--accent); margin-bottom: 14px;
   }
   #intro h1{
-    font-size: clamp(30px, 6vw, 56px); font-weight: 700; line-height: 1.06;
+    font-size: clamp(32px, 5.4vw, 56px); font-weight: 700; line-height: 1.04;
     margin: 0 0 10px 0;
   }
-  #intro .role{ font-family: var(--mono); font-size: 13px; color: var(--ink-dim); margin-bottom: 18px; }
-  #intro p.lede{
-    color: var(--ink-dim); max-width: 50ch; line-height: 1.55; margin: 0 0 26px 0;
-    font-size: 15px;
-  }
+  #intro .role{ font-family: var(--mono); font-size: 13px; color: var(--ink-dim); margin-bottom: 14px; }
+  #intro p.lede{ color: var(--ink); opacity: 0.88; line-height: 1.55; margin: 0 0 16px 0; font-size: 16px; }
+  .intro-highlights{ list-style:none; margin: 0 0 16px 0; padding: 0; display:grid; gap: 7px; }
+  .intro-highlights li{ position:relative; padding-left: 20px; color: var(--ink-dim); font-size: 14px; line-height: 1.45; }
+  .intro-highlights li::before{ content:'▸'; position:absolute; left: 2px; color: var(--accent); }
+  #intro .chips{ margin: 0 0 16px 0; }
+  .intro-contact{ display:flex; gap: 8px; flex-wrap:wrap; margin: 0 0 22px 0; }
+  .intro-divider{ height:1px; background: var(--line); margin: 0 0 18px 0; }
+  .intro-explore-h{ font-family: var(--mono); font-size: 12px; color: var(--ink-dim); margin: 0 0 12px 0; letter-spacing: 0.03em; }
+  #intro .actions{ display:flex; gap: 10px; flex-wrap:wrap; align-items:center; margin-bottom: 14px; }
   #intro .city-legend{
-    display:flex; gap: 8px; flex-wrap:wrap; justify-content:center; margin: 0 0 28px 0;
-    font-family: var(--mono); font-size: 12px;
+    display:flex; gap: 6px; flex-wrap:wrap; margin: 0 0 14px 0;
+    font-family: var(--mono); font-size: 11.5px; color: var(--ink-dim);
   }
   #intro .city-legend span{
-    border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px;
-    display:inline-flex; align-items:center; gap: 7px;
+    border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px;
+    display:inline-flex; align-items:center; gap: 6px; background: rgba(8,9,15,0.5);
   }
-  #intro .city-legend i{ width:8px; height:8px; border-radius:50%; display:inline-block; }
-  #intro .actions{ display:flex; gap: 12px; flex-wrap:wrap; justify-content:center; align-items:center; }
+  #intro .city-legend i{ width:7px; height:7px; border-radius:50%; display:inline-block; }
+  #intro .car-pick{ justify-content:flex-start; margin: 0 0 6px 0; }
+  #intro details{ margin-top: 10px; font-family: var(--mono); font-size: 12px; color: var(--ink-dim); }
+  #intro details summary{ cursor:pointer; }
+  #intro details summary:focus-visible{ outline: 2px solid var(--accent); outline-offset: 2px; }
 
   #load-bar{
     width: min(260px, 70vw); height: 3px; background: #1d2232; border-radius: 2px;
-    margin: 22px auto 0 auto; overflow:hidden;
+    margin: 4px 0 0 0; overflow:hidden;
   }
   #load-bar > div{ height:100%; width:0%; background: var(--accent); transition: width 0.2s ease; }
   #load-status{ font-family: var(--mono); font-size: 11px; color: var(--ink-dim); margin-top: 8px; min-height: 1.3em; }
 
   #intro .controls-hint{
-    margin-top: 22px; font-family: var(--mono); font-size: 12px; color: var(--ink-dim);
-    display:flex; gap: 18px; flex-wrap: wrap; justify-content:center; max-width: 640px;
+    margin-top: 10px; font-family: var(--mono); font-size: 12px; color: var(--ink-dim);
+    display:flex; gap: 8px 16px; flex-wrap: wrap;
   }
   #intro .controls-hint span{ white-space:nowrap; }
   #intro .notice{
@@ -122,6 +137,12 @@
     color: #ffd9a0; background: rgba(255,184,77,0.08); border: 1px solid rgba(255,184,77,0.3);
     border-radius: 6px; padding: 10px 14px; text-align:left; display:none;
   }
+  /* item focused from a billboard */
+  .card.focus, .timeline > li.focus, .skill-group.focus, .contact-list li.focus > *{
+    box-shadow: 0 0 0 2px var(--sec, var(--accent)); border-radius: 10px;
+  }
+  .timeline > li.focus{ padding: 6px 10px; margin-left: -10px; }
+  .skill-group.focus{ padding: 8px 10px; margin: -8px -10px; }
   #intro .notice code{ font-family: var(--mono); color: var(--ink); }
 
   /* ---------- HUD ---------- */
@@ -352,10 +373,20 @@
 
 <!-- ============ Intro ============ -->
 <div id="intro">
+ <div class="intro-card">
   <div class="kicker">// portfolio town</div>
   <h1 id="intro-name">Shashank Hosamani</h1>
   <div class="role" id="intro-role"></div>
-  <p class="lede" id="intro-lede">Drive a car through a small town where the sun, sky and street lights follow your real local time. Four roads lead out of the town square, each to its own city — and each city is a section of my portfolio.</p>
+  <p class="lede" id="intro-lede"></p>
+  <ul class="intro-highlights" id="intro-highlights"></ul>
+  <ul class="chips" id="intro-skills"></ul>
+  <div class="intro-contact" id="intro-contact"></div>
+  <div class="intro-divider"></div>
+  <div class="intro-explore-h">EXPLORE — drive a little town where every billboard is part of my portfolio, or just read it.</div>
+  <div class="actions">
+    <button class="btn primary" id="start-btn" disabled>Building the town…</button>
+    <button class="btn" id="intro-list-btn">Read as a page</button>
+  </div>
   <div class="city-legend">
     <span><i style="background:var(--blue)"></i>Projects · east</span>
     <span><i style="background:var(--amber)"></i>Skills · north</span>
@@ -368,25 +399,23 @@
     <span id="car-name" aria-live="polite">Sports sedan</span>
     <button id="car-next" aria-label="Next car">›</button>
   </div>
-  <div class="actions">
-    <button class="btn primary" id="start-btn">Start Engine</button>
-    <button class="btn" id="intro-list-btn">Skip the drive — read as a page</button>
-    <a class="btn" id="intro-resume" href="#" target="_blank" rel="noopener" style="display:none">Résumé ↗</a>
-  </div>
   <div id="load-bar" aria-hidden="true"><div></div></div>
   <div id="load-status" aria-live="polite">Loading 3D models…</div>
-  <div class="controls-hint">
-    <span><kbd>W</kbd>/<kbd>↑</kbd> drive</span>
-    <span><kbd>S</kbd>/<kbd>↓</kbd> brake / reverse</span>
-    <span><kbd>A</kbd> <kbd>D</kbd> steer</span>
-    <span><kbd>Space</kbd> handbrake / drift</span>
-    <span><kbd>E</kbd> enter a shop</span>
-    <span><kbd>C</kbd> change car</span>
-    <span><kbd>T</kbd> time of day</span>
-    <span><kbd>1</kbd>–<kbd>4</kbd> fast travel</span>
-    <span><kbd>H</kbd> help</span>
-    <span>drag to look around</span>
-  </div>
+  <details id="intro-controls">
+    <summary>Controls</summary>
+    <div class="controls-hint">
+      <span><kbd>W</kbd>/<kbd>↑</kbd> drive</span>
+      <span><kbd>S</kbd>/<kbd>↓</kbd> brake / reverse</span>
+      <span><kbd>A</kbd> <kbd>D</kbd> steer</span>
+      <span><kbd>Space</kbd> handbrake / drift</span>
+      <span><kbd>E</kbd> read a billboard / enter a shop</span>
+      <span><kbd>1</kbd>–<kbd>4</kbd> fast travel</span>
+      <span><kbd>C</kbd> change car</span>
+      <span><kbd>T</kbd> time of day</span>
+      <span><kbd>H</kbd> help</span>
+      <span>drag to look around</span>
+    </div>
+  </details>
   <div class="notice" id="file-notice">
     You opened this file straight from disk, so the browser blocks the 3D models — you'll get simple placeholder shapes instead.
     For the full look, serve the folder: run <code>python3 -m http.server</code> in it and open <code>http://localhost:8000</code>.
@@ -394,6 +423,7 @@
   <div class="notice" id="webgl-notice">
     Your browser or device can't run WebGL, so the 3D town is unavailable. Everything is still readable in the page view.
   </div>
+ </div>
 </div>
 
 <!-- ============ HUD ============ -->
@@ -503,7 +533,7 @@
     el.textContent = 'Something went wrong: ' + msg + '\n(Open devtools console for the full trace. You can still press L for the page view.)';
     el.style.display = 'block';
     var startBtn = $('start-btn');
-    if (startBtn && !running){ startBtn.textContent = 'Start Engine'; startBtn.disabled = false; }
+    if (startBtn && !running && worldBuilt){ startBtn.textContent = 'Drive the town ▸'; startBtn.disabled = false; }
   }
   window.addEventListener('error', function(e){ showFatalError(e.message || 'unknown error'); });
 
@@ -562,8 +592,8 @@
 
   var RENDERERS = {
     projects: function(d){
-      return '<div class="cards">' + (d.items || []).map(function(p){
-        return '<article class="card">' +
+      return '<div class="cards">' + (d.items || []).map(function(p, i){
+        return '<article class="card" data-item="' + i + '">' +
           '<div class="card-head"><h3>' + txt(p.name) + '</h3>' + (p.year ? '<span class="meta">' + txt(p.year) + '</span>' : '') + '</div>' +
           (p.summary ? '<p>' + txt(p.summary) + '</p>' : '') +
           bullets(p.details) + chips(p.tags) + linkButtons(p.links) +
@@ -571,13 +601,13 @@
       }).join('') + '</div>';
     },
     skills: function(d){
-      return '<div class="skill-groups">' + (d.groups || []).map(function(g){
-        return '<div class="skill-group"><h3>' + txt(g.name) + '</h3>' + chips(g.items) + '</div>';
+      return '<div class="skill-groups">' + (d.groups || []).map(function(g, i){
+        return '<div class="skill-group" data-item="' + i + '"><h3>' + txt(g.name) + '</h3>' + chips(g.items) + '</div>';
       }).join('') + '</div>';
     },
     experience: function(d){
-      return '<ol class="timeline">' + (d.items || []).map(function(x){
-        return '<li>' +
+      return '<ol class="timeline">' + (d.items || []).map(function(x, i){
+        return '<li data-item="' + i + '">' +
           '<h3>' + txt(x.role) + (x.org ? ' <span class="org">· ' + txt(x.org) + '</span>' : '') + '</h3>' +
           (x.period ? '<div class="meta">' + txt(x.period) + '</div>' : '') +
           (x.summary ? '<p>' + txt(x.summary) + '</p>' : '') +
@@ -587,7 +617,7 @@
     },
     contact: function(d){
       var ICON = { email:'@', github:'GH', linkedin:'in', x:'X', website:'www', other:'→' };
-      return '<ul class="contact-list">' + (d.links || []).map(function(l){
+      return '<ul class="contact-list">' + (d.links || []).map(function(l, i){
         var url = l.url;
         if (!url && l.kind === 'email' && l.value && !/TODO/.test(l.value)) url = 'mailto:' + l.value;
         var inner =
@@ -595,7 +625,7 @@
           '<span><span class="label">' + esc(l.label || l.kind || '') + '</span><br><span class="value">' + txt(l.value || url || '') + '</span></span>';
         var copy = (l.value && !/TODO/.test(l.value))
           ? '<button class="btn small copy-btn" data-copy="' + esc(l.value) + '" aria-label="Copy ' + esc(l.label || '') + '">Copy</button>' : '';
-        return '<li>' + (isRealUrl(url)
+        return '<li data-item="' + i + '">' + (isRealUrl(url)
           ? '<a href="' + esc(url) + '" target="_blank" rel="noopener">' + inner + copy + '</a>'
           : '<div class="contact-row">' + inner + copy + '</div>') + '</li>';
       }).join('') + '</ul>';
@@ -632,9 +662,29 @@
   if (profile.handle) $('hud-brand').textContent = profile.handle;
   $('hud-role').textContent = profile.role || '';
   $('list-intro').textContent = profile.tagline || '';
-  if (isRealUrl(profile.resumeUrl)){
-    var rb = $('intro-resume'); rb.href = profile.resumeUrl; rb.style.display = '';
-  }
+
+  // ---- landing card: who you are, before anyone has to drive ----
+  $('intro-lede').innerHTML = txt(profile.tagline || '');
+  $('intro-highlights').innerHTML = (profile.highlights || []).filter(Boolean).slice(0, 4)
+    .map(function(h){ return '<li>' + txt(h) + '</li>'; }).join('');
+  (function(){
+    var top = (profile.topSkills || []).filter(Boolean);
+    if (!top.length){                       // round-robin across skill groups
+      var groups = ((P.skills && P.skills.groups) || []).map(function(g){ return (g.items || []).slice(); });
+      for (var round = 0; top.length < 8 && round < 4; round++)
+        groups.forEach(function(g){ if (g[round] && top.length < 8) top.push(g[round]); });
+    }
+    $('intro-skills').innerHTML = top.map(function(t){ return '<li>' + txt(t) + '</li>'; }).join('');
+    var btns = [];
+    ((P.contact && P.contact.links) || []).forEach(function(l){
+      var url = l.url;
+      if (!url && l.kind === 'email' && l.value && !/TODO/.test(l.value)) url = 'mailto:' + l.value;
+      if (isRealUrl(url)) btns.push('<a class="btn small" href="' + esc(url) + '" target="_blank" rel="noopener">' + esc(l.label || l.kind) + ' ↗</a>');
+    });
+    if (isRealUrl(profile.resumeUrl)) btns.unshift('<a class="btn small" href="' + esc(profile.resumeUrl) + '" target="_blank" rel="noopener">Résumé ↗</a>');
+    $('intro-contact').innerHTML = btns.join('');
+    if (!btns.length) $('intro-contact').style.display = 'none';
+  })();
 
   // ---------------------------------------------------------------
   // Overlays: panel / help / list view. Only one open at a time.
@@ -678,7 +728,7 @@
     else if (!e.shiftKey && document.activeElement === last){ e.preventDefault(); first.focus(); }
   });
 
-  function openPanel(key){
+  function openPanel(key, focusItem){
     var s = SECTION_BY_KEY[key];
     if (!s) return;
     currentPanelKey = key;
@@ -697,6 +747,13 @@
     sheet.scrollTop = 0;
     history.replaceState(null, '', '#' + key);
     showOverlay('panel');
+    if (focusItem !== undefined){
+      var el = $('panel-body').querySelector('[data-item="' + focusItem + '"]');
+      if (el){
+        el.classList.add('focus');
+        setTimeout(function(){ sheet.scrollTop = Math.max(0, el.offsetTop - 90); }, 40);
+      }
+    }
   }
 
   function buildListView(){
@@ -767,8 +824,11 @@
     $('start-btn').style.display = 'none';
     $('load-bar').style.display = 'none';
     $('load-status').style.display = 'none';
-    document.querySelector('#intro .controls-hint').style.display = 'none';
+    $('intro').classList.add('no-3d');
+    $('intro-controls').style.display = 'none';
     $('car-pick').style.display = 'none';
+    document.querySelector('#intro .city-legend').style.display = 'none';
+    document.querySelector('#intro .intro-explore-h').textContent = 'EXPLORE';
     var lb = $('intro-list-btn');
     lb.classList.add('primary'); lb.textContent = 'Read the portfolio';
     if (typeof THREE === 'undefined') $('webgl-notice').textContent = "The 3D library couldn't load (offline, or a blocker?). Everything is still readable in the page view.";
@@ -2073,6 +2133,7 @@
           var off = SIDEWALK_OUTER - 0.9;
           var tx = f3.point.x + f3.normal.x*side*off, tz = f3.point.z + f3.normal.z*side*off;
           if (distToRoads(tx, tz, road) < JUNCTION_CLEAR) return;
+          if (nearBillboard(tx, tz, 5.5)) return;
           makeTree(new THREE.Vector3(tx, CURB_H, tz), 0.75);
         });
       }
@@ -2431,7 +2492,9 @@
     var ready = !!(best && !openOverlay);
     $('btn-interact').classList.toggle('ready', ready);
     if (ready){
-      promptTextEl.textContent = 'Explore ' + SECTION_BY_KEY[best.key].label;
+      promptTextEl.textContent = best.kind === 'item'
+        ? 'Read: ' + (best.title.length > 30 ? best.title.slice(0, 29) + '…' : best.title)
+        : 'Explore ' + SECTION_BY_KEY[best.key].label;
       promptEl.classList.add('show');
     } else {
       promptEl.classList.remove('show');
@@ -2440,7 +2503,7 @@
 
   tryInteract = function(){
     if (openOverlay || !nearestStation) return;
-    openPanel(nearestStation.key);
+    openPanel(nearestStation.key, nearestStation.item);
   };
 
   function placeCarAt(pt, nextPt){
@@ -2610,6 +2673,152 @@
     src.connect(lp); lp.connect(g); g.connect(AUD.master); src.start();
   }
 
+  // ---------------------------------------------------------------
+  // Billboards: every portfolio item stands in the world. Each city's
+  // avenue is lined with lit billboards — one per project, job, skill
+  // group or contact method — so you can read the portfolio just by
+  // driving past. Pull up and press E to open that exact item.
+  // ---------------------------------------------------------------
+  var billboardSpots = [];
+  function sectionItems(key){
+    var d = P[key] || {};
+    if (key === 'skills') return d.groups || [];
+    if (key === 'contact') return d.links || [];
+    return d.items || [];
+  }
+  function billboardContent(key, i){
+    var it = sectionItems(key)[i];
+    if (!it) return null;
+    var n = String(i + 1).padStart(2, '0');
+    if (key === 'projects')   return { eyebrow: 'PROJECT ' + n + (it.year ? '  ·  ' + it.year : ''), title: it.name, sub: '', body: it.summary, chips: it.tags };
+    if (key === 'experience') return { eyebrow: 'EXPERIENCE  ·  ' + (it.period || ''), title: it.org || it.role, sub: it.org ? it.role : '', body: it.summary, chips: [] };
+    if (key === 'skills')     return { eyebrow: 'SKILLS  ·  ' + n, title: it.name, sub: '', body: '', chips: it.items };
+    return { eyebrow: 'CONTACT', title: it.label || it.kind, sub: it.value || '', body: 'Pull over and press E to open', chips: [] };
+  }
+
+  function wrapLines(ctx, text, maxW, maxLines){
+    var words = String(text || '').split(/\s+/), lines = [], line = '';
+    for (var i=0;i<words.length;i++){
+      var test = line ? line + ' ' + words[i] : words[i];
+      if (ctx.measureText(test).width > maxW && line){ lines.push(line); line = words[i]; }
+      else line = test;
+      if (lines.length === maxLines) break;
+    }
+    if (lines.length < maxLines && line) lines.push(line);
+    if (lines.length === maxLines && words.join(' ') !== lines.join(' ')){
+      var last = lines[maxLines-1];
+      while (last.length && ctx.measureText(last + '…').width > maxW) last = last.slice(0, -1);
+      lines[maxLines-1] = last.replace(/\s+\S*$/, '') + '…';
+    }
+    return lines;
+  }
+  function billboardTexture(c, color){
+    var W = 1024, H = 640, cv = document.createElement('canvas');
+    cv.width = W; cv.height = H;
+    var x = cv.getContext('2d'), pad = 60, maxW = W - pad*2;
+    var g = x.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#161c2b'); g.addColorStop(1, '#0a0d15');
+    x.fillStyle = g; x.fillRect(0, 0, W, H);
+    x.fillStyle = color; x.fillRect(0, 0, W, 18);
+    x.globalAlpha = 0.12; x.fillRect(0, 18, W, 120); x.globalAlpha = 1;
+    var SANS = '"Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif', MONO = '"JetBrains Mono", Consolas, monospace';
+    var y = 92;
+    x.textBaseline = 'alphabetic';
+    x.font = '600 30px ' + MONO; x.fillStyle = color; x.fillText(c.eyebrow, pad, y);
+    // title: shrink to fit, up to two lines
+    var size = 92, lines;
+    do { x.font = '700 ' + size + 'px ' + SANS; lines = wrapLines(x, c.title, maxW, 2); size -= 6; }
+    while (size > 54 && lines.some(function(l){ return x.measureText(l).width > maxW; }));
+    x.fillStyle = /TODO/.test(c.title) ? '#ffb84d' : '#f5f2ec';
+    lines.forEach(function(l){ y += size + 10; x.fillText(l, pad, y); });
+    if (c.sub){
+      y += 50; x.font = '500 36px ' + MONO; x.fillStyle = /TODO/.test(c.sub) ? '#ffb84d' : '#a8aebd';
+      x.fillText(wrapLines(x, c.sub, maxW, 1)[0] || '', pad, y);
+    }
+    if (c.body){
+      x.font = '400 38px ' + SANS; x.fillStyle = /TODO/.test(c.body) ? '#ffb84d' : '#d9d5cc';
+      y += 26;
+      wrapLines(x, c.body, maxW, c.chips && c.chips.length ? 2 : 3).forEach(function(l){ y += 50; x.fillText(l, pad, y); });
+    }
+    var chips = (c.chips || []).filter(Boolean);
+    if (chips.length){
+      x.font = '500 30px ' + MONO;
+      var cx = pad, cy = Math.max(y + 40, H - 150), rowH = 56;
+      chips.forEach(function(t){
+        var w = x.measureText(t).width + 40;
+        if (cx + w > W - pad){ cx = pad; cy += rowH + 12; }
+        if (cy + rowH > H - 24) return;
+        x.strokeStyle = color; x.lineWidth = 3;
+        var r = 26;
+        x.beginPath();
+        x.moveTo(cx + r, cy); x.lineTo(cx + w - r, cy); x.arc(cx + w - r, cy + r, r, -Math.PI/2, Math.PI/2);
+        x.lineTo(cx + r, cy + rowH - 4); x.arc(cx + r, cy + r, r, Math.PI/2, Math.PI*1.5);
+        x.closePath(); x.stroke();
+        x.fillStyle = '#f0ece4'; x.fillText(t, cx + 20, cy + 38);
+        cx += w + 14;
+      });
+    }
+    var tex = new THREE.CanvasTexture(cv);
+    tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+    return tex;
+  }
+
+  var BB = null;
+  function placeBillboard(cd, key, i, s, side){
+    var c = billboardContent(key, i);
+    if (!c) return;
+    if (!BB){
+      BB = {
+        board: new THREE.PlaneGeometry(7.2, 4.5),
+        frame: new THREE.BoxGeometry(7.6, 4.9, 0.3),
+        post: new THREE.CylinderGeometry(0.13, 0.15, 4.9, 8),
+        metal: new THREE.MeshStandardMaterial({ color: 0x23262d, roughness: 0.5, metalness: 0.6 })
+      };
+    }
+    var road = cd.avenue, f = frameAt(road, s);
+    var n = f.normal.clone().multiplyScalar(side);                       // from road toward the lot
+    var pos = f.point.clone().addScaledVector(n, SIDEWALK_OUTER + 1.7);
+    // face the road, angled toward drivers arriving from the town square
+    var face = n.clone().negate().addScaledVector(f.tangent, -0.6).normalize();
+    var grp = new THREE.Group();
+    grp.position.set(pos.x, 0, pos.z);
+    grp.rotation.y = Math.atan2(face.x, face.z);
+    var colorHex = '#' + new THREE.Color(cd.color).getHexString();
+    var board = new THREE.Mesh(BB.board, new THREE.MeshBasicMaterial({ map: billboardTexture(c, colorHex) }));
+    board.position.set(0, 5.0, 0.17);
+    var frame = new THREE.Mesh(BB.frame, BB.metal); frame.position.set(0, 5.0, 0); frame.castShadow = true;
+    grp.add(board); grp.add(frame);
+    [-2.6, 2.6].forEach(function(px){
+      var post = new THREE.Mesh(BB.post, BB.metal); post.position.set(px, 2.45, -0.05); post.castShadow = true; grp.add(post);
+    });
+    var accent = new THREE.Mesh(new THREE.BoxGeometry(7.6, 0.12, 0.34), new THREE.MeshBasicMaterial({ color: cd.color }));
+    accent.position.set(0, 7.5, 0); grp.add(accent);
+    scene.add(grp);
+    placedFootprints.push({ x: pos.x, z: pos.z, r: 4.6 });
+    billboardSpots.push({ x: pos.x, z: pos.z });
+    stationMeshes.push({ key: key, item: i, kind: 'item', title: c.title, position: new THREE.Vector3(pos.x, 0, pos.z),
+                         triggerRadius: 12.5, cityCenter: cd.center });
+  }
+  function nearBillboard(x, z, r){
+    for (var i=0;i<billboardSpots.length;i++){
+      var b = billboardSpots[i];
+      if ((b.x-x)*(b.x-x) + (b.z-z)*(b.z-z) < r*r) return true;
+    }
+    return false;
+  }
+
+  // Slow flyover behind the landing card, before the visitor drives.
+  var attract = true, attractT = 0;
+  function attractCamera(dt){
+    attractT += dt;
+    var a = attractT * 0.04 + 0.7;
+    camera.position.set(Math.cos(a)*140, 64 + Math.sin(attractT*0.12)*6, Math.sin(a)*140);
+    camera.lookAt(0, 0, 0);
+    var W = window.innerWidth, H = window.innerHeight;
+    if (W > 760) camera.setViewOffset(W, H, -W*0.2, 0, W, H);   // town sits right of the card
+    else camera.clearViewOffset();
+  }
+
   var _camFwd = new THREE.Vector3();
   function updateCamera(dt){
     if (!isDragging){
@@ -2662,7 +2871,8 @@
       var mx = cx + s.position.x*k;
       var mz = cy + s.position.z*k;
       mmCtx.fillStyle = sec.color;
-      mmCtx.beginPath(); mmCtx.arc(mx, mz, 6, 0, Math.PI*2); mmCtx.fill();
+      mmCtx.beginPath(); mmCtx.arc(mx, mz, s.kind === 'item' ? 3.5 : 6, 0, Math.PI*2); mmCtx.fill();
+      if (s.kind === 'item') return;
       var lx = cx + s.cityCenter.x*k, lz = cy + s.cityCenter.z*k;
       mmCtx.fillText(String(sec.index + 1), lx, lz);
     });
@@ -2685,7 +2895,18 @@
 
   function tick(){
     requestAnimationFrame(tick);
-    if (!running) return;
+    if (!running){
+      if (worldBuilt && attract){
+        try {
+          var adt = Math.min(clock.getDelta(), 0.1);
+          updateTraffic(adt);
+          updateSky(adt);
+          attractCamera(adt);
+          renderer.render(scene, camera);
+        } catch(e){ attract = false; showFatalError(e.message || 'render loop error'); }
+      }
+      return;
+    }
     try {
       var dt = Math.min(clock.getDelta(), 0.1);
       var t = clock.elapsedTime;
@@ -2697,6 +2918,7 @@
       if (!debugCam) updateCamera(dt);
       // gentle bob on shop labels so they read as interactive
       stationMeshes.forEach(function(s, i){
+        if (!s.label) return;
         s.label.position.y = 6.6 + Math.sin(t*2 + i) * 0.18;
         s.ring.material.opacity = (s === nearestStation) ? 1 : 0.55 + Math.sin(t*3 + i)*0.2;
       });
@@ -2718,6 +2940,7 @@
       get car(){ return car; },
       get state(){ return CS; },
       get traffic(){ return traffic; },
+      get stations(){ return stationMeshes; },
       // force a sun position, e.g. __town.sky(30, 180) for mid-afternoon
       sky: function(el, az){ skyMode = 'debug'; skyTarget.el = el; skyTarget.az = az; skyCur = null; skyClockTimer = 1e9; updateSky(0); },
       solar: function(iso, lat, lon){ return solarPosition(new Date(iso), lat, lon); },
@@ -2869,6 +3092,16 @@
       scene.add(group);
       placedFootprints.push({ x: pos.x, z: pos.z, r: 7 });
       stationMeshes.push({ key: cd.key, position: pos, group: group, label: label, ring: ring, cityCenter: cd.center, triggerRadius: 13 });
+    });
+
+    // ---- Billboards: one per portfolio item along each avenue ----
+    CITY_DEFS.forEach(function(cd){
+      var n = Math.min(sectionItems(cd.key).length, 8);
+      var s0 = 18, s1 = cd.avenue.length - 20;
+      for (var i=0;i<n;i++){
+        var s = n === 1 ? (s0 + s1)/2 : s0 + (s1 - s0) * i/(n-1);
+        placeBillboard(cd, cd.key, i, s, i % 2 ? 1 : -1);
+      }
     });
 
     // ---- Buildings, street lights and street trees ----
@@ -3039,38 +3272,42 @@
     worldBuilt = true;
   }
 
+  // Build the town as soon as the models are in, so it can fly by
+  // behind the landing card; Start then just hands over the wheel.
   var startBtn = $('start-btn');
+  (function prebuild(){
+    if (!assetsSettled){ setTimeout(prebuild, 100); return; }
+    var assetMsg = $('load-status').textContent;      // keep any "model unavailable" note
+    setLoad(1, 'Building the town…');
+    setTimeout(function(){
+      try {
+        initWorld();
+        setLoad(1, assetMsg || 'Ready');
+        startBtn.disabled = false;
+        startBtn.textContent = 'Drive the town ▸';
+      } catch(e){
+        showFatalError(e.message || String(e));
+      }
+    }, 30);
+  })();
+
   startBtn.addEventListener('click', function(){
+    if (!worldBuilt) return;
     startBtn.disabled = true;
     startEngineAudio();          // needs this user click to be allowed
     $('fatal-error').style.display = 'none';
-    function go(){
-      startBtn.textContent = 'Building town…';
-      setTimeout(function(){
-        try {
-          initWorld();
-          $('intro').style.display = 'none';
-          $('hud').classList.add('active');
-          running = true;
-          clock.start();
-          if (SECTION_BY_KEY[initialHash]){
-            teleportTo(initialHash);
-            setTimeout(function(){ openPanel(initialHash); }, 400);
-          } else {
-            toast('Pick a road — or press 1–4 to fast travel');
-          }
-        } catch(e){
-          showFatalError(e.message || String(e));
-        }
-      }, 30);
-    }
-    if (assetsSettled){
-      go();
+    attract = false;
+    camera.clearViewOffset();
+    placeCarAt(spawn.pt, spawn.next);
+    $('intro').style.display = 'none';
+    $('hud').classList.add('active');
+    running = true;
+    clock.getDelta();
+    if (SECTION_BY_KEY[initialHash]){
+      teleportTo(initialHash);
+      setTimeout(function(){ openPanel(initialHash); }, 400);
     } else {
-      startBtn.textContent = 'Loading assets…';
-      var waitTimer = setInterval(function(){
-        if (assetsSettled){ clearInterval(waitTimer); go(); }
-      }, 100);
+      toast('Every billboard is part of the portfolio — or press 1–4 to fast travel');
     }
   });
 

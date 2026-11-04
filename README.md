@@ -92,6 +92,12 @@ road_modular/, city_scene/, neighbourhood_city_modular_lowpoly/, modular_bridgeâ
 
 The page loads only the `scene.web.gltf` files, which use small textures from `textures_web/`. Each model loads in the background while the intro screen shows. If a model fails, the page falls back to procedural geometry.
 
+### How visitors see your portfolio
+
+- **Landing card**: the first screen is a summary of you over a live flyover of the town: name, role, tagline, up to 4 `highlights`, top skills (from `topSkills`, or picked automatically from your skill groups), and buttons for every contact link with a real URL plus `resumeUrl`. A recruiter gets the essentials without driving. From there it's **Drive the town** or **Read as a page**.
+- **Billboards**: every portfolio item stands in the world. Each city's avenue is lined with lit billboards, one per project, job, skill group or contact method (up to 8 per city), so the portfolio can be read just by driving past. Pull up to one and press **E** to open the section scrolled to that exact item, which is highlighted. The shop at the end of each avenue opens the whole section.
+- **Fast travel, page view and deep links** work as before (`1`â€“`4`, `L`, `#projects`, `#list`).
+
 ### How the world is built (`initWorld` in `index.html`)
 
 ```
@@ -119,7 +125,7 @@ The page loads only the `scene.web.gltf` files, which use small textures from `t
 
   A building is only placed if all four corners of its footprint clear every sidewalk and other buildings. If the first size doesn't fit, smaller footprints are tried before the spot is skipped.
 - **Collision**: the car stays on the union of all road surfaces, with its distance from the nearest centre-line limited so the wheels stay off the curb. Hitting the curb removes the part of the velocity going into it, so the car glances off and slides along. A hard hit shakes the camera.
-- **Shops**: a shop opens its panel when the car is within 13 units of it.
+- **Shops & billboards**: a shop opens its section when the car is within 13 m; a billboard opens its item within 12.5 m (the nearest one wins).
 - **Debug view**: add `?debug` to the URL, then use `__town.topDown(x, z, height)` in the console for a bird's-eye view of any area. `__town.follow()` returns to the chase camera.
 
 ### Day and night (`applySky` in `index.html`)

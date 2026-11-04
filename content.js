@@ -29,7 +29,16 @@ window.PORTFOLIO = {
     tagline: "I build always-on AI agents and the products around them.",
     location: "TODO: City, Country",
     // Optional — shown as a button on the intro screen and in list view.
-    resumeUrl: ""
+    resumeUrl: "",
+    // 2–4 one-liners shown on the landing card. Lead with outcomes.
+    highlights: [
+      "Building AI agents for ledger reconciliation at OneCap",
+      "Created AgentRealm — a platform for always-on AI agents",
+      "Shipped Costiq, an SMS-based expense tracker for Android"
+    ],
+    // Optional — chips on the landing card. Leave empty to pick
+    // automatically from the skills section below.
+    topSkills: []
   },
 
   projects: {
@@ -68,10 +77,11 @@ window.PORTFOLIO = {
       {
         name: "Portfolio Town",
         year: "2026",
-        summary: "This site — a drivable 3D town built with Three.js where each city is a section of my portfolio.",
+        summary: "This site — a drivable 3D town built with Three.js where every billboard is part of my portfolio.",
         details: [
-          "Procedural road network with spline-tiled GLTF road kit and graceful procedural fallback.",
-          "Content is fully data-driven from a single file, with an accessible list view."
+          "Procedural streets with clean junctions, procedural buildings, and day/night that follows the visitor's real local time.",
+          "Car physics (bicycle-model steering, tyre grip, drifting), AI traffic, and engine sound synthesised with WebAudio.",
+          "All content is data-driven from one file, with a plain page view for anyone who'd rather not drive."
         ],
         tags: ["Three.js", "WebGL", "JavaScript"],
         links: [
