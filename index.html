@@ -159,6 +159,23 @@
   }
   #speed-readout b{ color: var(--accent); font-size: 20px; font-weight: 700; }
   #location-readout{ display:block; margin-top: 2px; font-size: 11px; }
+  #gear-val{
+    display:inline-block; min-width: 22px; text-align:center; margin-left: 8px;
+    border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; color: var(--ink); font-weight: 700;
+  }
+  #rpm-bar{ width: 120px; height: 4px; background: #1d2232; border-radius: 2px; margin-top: 5px; overflow:hidden; }
+  #rpm-bar > div{ height:100%; width: 12%; background: var(--accent); transition: width 0.06s linear; }
+
+  .car-pick{
+    display:flex; align-items:center; gap: 10px; justify-content:center; margin: 0 0 22px 0;
+    font-family: var(--mono); font-size: 12px; color: var(--ink-dim);
+  }
+  .car-pick button{
+    font: inherit; background: transparent; color: var(--ink); border: 1px solid var(--line);
+    border-radius: 4px; width: 28px; height: 28px; cursor: pointer;
+  }
+  .car-pick button:hover, .car-pick button:focus-visible{ border-color: var(--accent); outline: none; }
+  #car-name{ color: var(--ink); min-width: 13ch; text-align:center; }
 
   #station-prompt{
     position:absolute; bottom: 90px; left:50%; transform: translateX(-50%) translateY(8px);
@@ -192,6 +209,7 @@
   #btn-right{ bottom: 24px; left: 96px; }
   #btn-accel{ bottom: 96px; right: 20px; }
   #btn-brake{ bottom: 24px; right: 20px; }
+  #btn-hand{ bottom: 24px; right: 96px; font-size: 11px; font-family: var(--mono); }
   #btn-interact{
     bottom: 168px; right: 20px; width: 64px; height:56px; border-radius: 28px;
     background: rgba(255,207,138,0.16); border-color: var(--accent); font-size: 11px;
@@ -344,6 +362,12 @@
     <span><i style="background:var(--pink)"></i>Experience · south</span>
     <span><i style="background:var(--violet)"></i>Contact · west</span>
   </div>
+  <div class="car-pick" id="car-pick">
+    Your car
+    <button id="car-prev" aria-label="Previous car">‹</button>
+    <span id="car-name" aria-live="polite">Sports sedan</span>
+    <button id="car-next" aria-label="Next car">›</button>
+  </div>
   <div class="actions">
     <button class="btn primary" id="start-btn">Start Engine</button>
     <button class="btn" id="intro-list-btn">Skip the drive — read as a page</button>
@@ -355,7 +379,9 @@
     <span><kbd>W</kbd>/<kbd>↑</kbd> drive</span>
     <span><kbd>S</kbd>/<kbd>↓</kbd> brake / reverse</span>
     <span><kbd>A</kbd> <kbd>D</kbd> steer</span>
+    <span><kbd>Space</kbd> handbrake / drift</span>
     <span><kbd>E</kbd> enter a shop</span>
+    <span><kbd>C</kbd> change car</span>
     <span><kbd>1</kbd>–<kbd>4</kbd> fast travel</span>
     <span><kbd>H</kbd> help</span>
     <span>drag to look around</span>
@@ -379,6 +405,8 @@
       <button class="btn small" id="hud-help-btn" title="Controls (H)">? Help</button>
       <button class="btn small" id="hud-list-btn" title="Read as a page (L)">≡ Page view</button>
       <button class="btn small" id="hud-reset-btn" title="Back to the town square (R)">⟲ Reset</button>
+      <button class="btn small" id="hud-car-btn" title="Change car (C)">⇄ Car</button>
+      <button class="btn small" id="hud-sound-btn" title="Engine sound (M)">♪ Sound on</button>
     </div>
   </div>
 
@@ -393,10 +421,11 @@
     <div class="tbtn" id="btn-right" aria-label="Steer right">▶</div>
     <div class="tbtn" id="btn-accel" aria-label="Accelerate">▲</div>
     <div class="tbtn" id="btn-brake" aria-label="Brake">▼</div>
+    <div class="tbtn" id="btn-hand" aria-label="Handbrake">DRIFT</div>
     <div class="tbtn" id="btn-interact" aria-label="Enter shop">ENTER</div>
   </div>
 
-  <div id="speed-readout"><b id="speed-val">0</b> km/h<span id="location-readout">Town square</span></div>
+  <div id="speed-readout"><b id="speed-val">0</b> km/h<span id="gear-val" title="Gear">N</span><div id="rpm-bar" aria-hidden="true"><div></div></div><span id="location-readout">Town square</span></div>
 </div>
 
 <!-- ============ Station panel ============ -->
@@ -425,7 +454,8 @@
     <dl class="help-grid">
       <dt><kbd>W</kbd> / <kbd>↑</kbd></dt><dd>Accelerate</dd>
       <dt><kbd>S</kbd> / <kbd>↓</kbd></dt><dd>Brake, then reverse</dd>
-      <dt><kbd>A</kbd> <kbd>D</kbd> / <kbd>←</kbd> <kbd>→</kbd></dt><dd>Steer</dd>
+      <dt><kbd>A</kbd> <kbd>D</kbd> / <kbd>←</kbd> <kbd>→</kbd></dt><dd>Steer (less lock at speed, like a real car)</dd>
+      <dt><kbd>Space</kbd></dt><dd>Handbrake — tap it mid-corner to drift</dd>
       <dt>Drag</dt><dd>Look around (camera springs back)</dd>
     </dl>
     <div class="help-h">SHORTCUTS</div>
@@ -433,12 +463,14 @@
       <dt><kbd>E</kbd> / <kbd>Enter</kbd></dt><dd>Enter the nearby shop</dd>
       <dt><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd></dt><dd>Fast travel to Projects, Skills, Experience, Contact</dd>
       <dt><kbd>R</kbd></dt><dd>Reset to the town square</dd>
+      <dt><kbd>C</kbd></dt><dd>Change car (7 to choose from)</dd>
+      <dt><kbd>M</kbd></dt><dd>Engine sound on / off</dd>
       <dt><kbd>L</kbd></dt><dd>Read everything as a normal page</dd>
       <dt><kbd>H</kbd> / <kbd>?</kbd></dt><dd>This help</dd>
       <dt><kbd>Esc</kbd></dt><dd>Close any window</dd>
     </dl>
     <div class="help-h">ON A PHONE</div>
-    <p class="body-copy" style="margin:0">Use the on-screen arrows to drive; tap <b>ENTER</b> when it lights up. The fast-travel chips at the top left take you straight to a city.</p>
+    <p class="body-copy" style="margin:0">Use the on-screen arrows to drive and <b>DRIFT</b> for the handbrake; tap <b>ENTER</b> when it lights up. The fast-travel chips at the top left take you straight to a city.</p>
   </div>
 </div>
 
@@ -686,6 +718,7 @@
   // 3D model credits — several of these are CC-BY, which REQUIRES
   // visible attribution wherever the work is shared.
   var CREDITS = [
+    { title:'Car Kit (sports sedan, hot hatch, race car, police, taxi, SUV)', author:'Kenney', url:'https://kenney.nl/assets/car-kit', license:'CC0', site:'kenney.nl' },
     { title:'Dodge Challenger – Muscle Car – Low-Poly', author:'Allay Design', url:'https://sketchfab.com/3d-models/dodge-challenger-muscle-car-low-poly-4c741c8d40c34ebe8b999e5a2823d80f', license:'Sketchfab Standard' },
     { title:'Australian Traffic Light & Pedestrian Light', author:'JoTrain The Aussie', url:'https://sketchfab.com/3d-models/australian-traffic-light-pedestrain-light-72b20af0bca44dfab473cbbd1f0af7a2', license:'Sketchfab Standard' }
   ];
@@ -695,7 +728,7 @@
       '<ul class="credits">' +
         '<li>Rendering: <a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> r128</li>' +
         CREDITS.map(function(c){
-          return '<li>"' + esc(c.title) + '" by ' + esc(c.author) + ' — <a href="' + esc(c.url) + '" target="_blank" rel="noopener">Sketchfab</a> (' + esc(c.license) + ')</li>';
+          return '<li>"' + esc(c.title) + '" by ' + esc(c.author) + ' — <a href="' + esc(c.url) + '" target="_blank" rel="noopener">' + esc(c.site || 'Sketchfab') + '</a> (' + esc(c.license) + ')</li>';
         }).join('') +
       '</ul></section>';
   }
@@ -732,6 +765,7 @@
     $('load-bar').style.display = 'none';
     $('load-status').style.display = 'none';
     document.querySelector('#intro .controls-hint').style.display = 'none';
+    $('car-pick').style.display = 'none';
     var lb = $('intro-list-btn');
     lb.classList.add('primary'); lb.textContent = 'Read the portfolio';
     if (typeof THREE === 'undefined') $('webgl-notice').textContent = "The 3D library couldn't load (offline, or a blocker?). Everything is still readable in the page view.";
@@ -744,9 +778,9 @@
   // ---------------------------------------------------------------
   // Input state shared by keyboard + touch
   // ---------------------------------------------------------------
-  var input = { forward:false, backward:false, left:false, right:false };
+  var input = { forward:false, backward:false, left:false, right:false, handbrake:false };
   function releaseInput(){
-    input.forward = input.backward = input.left = input.right = false;
+    input.forward = input.backward = input.left = input.right = input.handbrake = false;
     document.querySelectorAll('.tbtn.held').forEach(function(b){ b.classList.remove('held'); });
   }
   window.addEventListener('blur', releaseInput);
@@ -755,6 +789,7 @@
   // These are assigned once the world exists.
   var running = false, renderer = null, currentCity = null;
   var teleportTo = function(){}, resetCar = function(){}, tryInteract = function(){};
+  var changeCar = function(){}, toggleSound = function(){};
 
   window.addEventListener('keydown', function(e){
     var k = e.key.toLowerCase();
@@ -776,6 +811,9 @@
       case 'd': case 'arrowright': input.right = true; e.preventDefault(); break;
       case 'e': case 'enter': tryInteract(); break;
       case 'r': resetCar(); break;
+      case ' ': input.handbrake = true; e.preventDefault(); break;
+      case 'c': changeCar(1); break;
+      case 'm': toggleSound(); break;
       case '1': case '2': case '3': case '4': teleportTo(SECTIONS[+k - 1].key); break;
     }
   });
@@ -785,6 +823,7 @@
       case 's': case 'arrowdown': input.backward = false; break;
       case 'a': case 'arrowleft': input.left = false; break;
       case 'd': case 'arrowright': input.right = false; break;
+      case ' ': input.handbrake = false; break;
     }
   });
 
@@ -797,35 +836,90 @@
   // fails to load — e.g. the file was opened as file:// instead of
   // served over http://, which blocks the fetch.
   // ---------------------------------------------------------------
-  var ASSETS = { car: null, trafficLight: null };
-  var assetsSettled = false;
+  // ---------------------------------------------------------------
+  // Cars you can drive. The Kenney models are CC0 (public domain);
+  // each has separate wheel nodes, so wheels spin and steer.
+  //   top   — top speed, m/s        accel — 0-to-speed punch, m/s²
+  //   brake — m/s²                  grip  — how fast sideways slide dies
+  //   steer — max front-wheel angle at low speed, radians
+  // ---------------------------------------------------------------
+  var CARS = [
+    { id:'sedan-sports',     name:'Sports sedan',   url:'models/cars/sedan-sports.glb',     length:4.6, top:36, accel:10,  brake:15, grip:7.5, steer:0.55 },
+    { id:'hatchback-sports', name:'Hot hatch',      url:'models/cars/hatchback-sports.glb', length:4.1, top:33, accel:11,  brake:15, grip:8.5, steer:0.62 },
+    { id:'race',             name:'Race car',       url:'models/cars/race.glb',             length:4.7, top:44, accel:14,  brake:19, grip:10,  steer:0.5  },
+    { id:'police',           name:'Police cruiser', url:'models/cars/police.glb',           length:5.0, top:38, accel:10.5,brake:15, grip:7,   steer:0.52 },
+    { id:'taxi',             name:'Taxi',           url:'models/cars/taxi.glb',             length:4.7, top:30, accel:8,   brake:13, grip:6.5, steer:0.55 },
+    { id:'suv-luxury',       name:'Luxury SUV',     url:'models/cars/suv-luxury.glb',       length:4.9, top:31, accel:8.5, brake:13, grip:6,   steer:0.5  },
+    { id:'muscle',           name:'Muscle car',     url:'dodge_challenger_-_muscle_car_-_low-poly/scene.web.gltf',
+                             length:4.6, top:40, accel:12.5, brake:14, grip:5, steer:0.5, flip:true, noWheels:true }
+  ];
+  var CAR_BY_ID = {};
+  CARS.forEach(function(c){ CAR_BY_ID[c.id] = c; });
+  var carId = 'sedan-sports';
+  try { var savedCar = localStorage.getItem('town.car'); if (CAR_BY_ID[savedCar]) carId = savedCar; } catch(e){}
+  function saveCarChoice(){ try { localStorage.setItem('town.car', carId); } catch(e){} }
+
+  function refreshCarLabels(){
+    var name = CAR_BY_ID[carId].name;
+    $('car-name').textContent = name;
+    $('hud-car-btn').textContent = '⇄ ' + name;
+  }
+  function cycleCarId(dir){
+    var i = CARS.indexOf(CAR_BY_ID[carId]);
+    carId = CARS[(i + dir + CARS.length) % CARS.length].id;
+    saveCarChoice();
+    refreshCarLabels();
+  }
+  $('car-prev').addEventListener('click', function(){ cycleCarId(-1); });
+  $('car-next').addEventListener('click', function(){ cycleCarId(1); });
+  refreshCarLabels();
+
+  var ASSETS = { cars: {}, trafficLight: null };
+  var assetsSettled = false, gltfLoader = null;
 
   function setLoad(frac, msg){
     $('load-bar').firstElementChild.style.width = Math.round(frac*100) + '%';
     $('load-status').textContent = msg;
   }
 
+  // Load (or reuse) one car model; cb(sceneOrNull)
+  var carLoads = {};
+  function loadCarModel(spec, cb, onProgress){
+    if (ASSETS.cars[spec.id] !== undefined){ cb(ASSETS.cars[spec.id]); return; }
+    if (!gltfLoader){ ASSETS.cars[spec.id] = null; cb(null); return; }
+    if (carLoads[spec.id]){ carLoads[spec.id].push(cb); return; }
+    carLoads[spec.id] = [cb];
+    gltfLoader.load(spec.url, function(gltf){
+      ASSETS.cars[spec.id] = gltf.scene;
+      carLoads[spec.id].forEach(function(f){ f(gltf.scene); }); delete carLoads[spec.id];
+    }, onProgress, function(err){
+      console.warn('[assets] car "' + spec.id + '" failed to load — using a simple stand-in. ' +
+        'If you opened this file directly, serve it over http:// instead (e.g. `python3 -m http.server`).', err);
+      ASSETS.cars[spec.id] = null;
+      carLoads[spec.id].forEach(function(f){ f(null); }); delete carLoads[spec.id];
+    });
+  }
+
   function loadAssets(){
-    var loader;
     try {
-      loader = new THREE.GLTFLoader();
+      gltfLoader = new THREE.GLTFLoader();
     } catch(e){
       console.warn('[assets] GLTFLoader unavailable — using procedural fallback everywhere.', e);
       setLoad(1, 'Ready (simplified graphics)');
       assetsSettled = true;
       return;
     }
-    var jobs = [
-      { key:'car', url: 'dodge_challenger_-_muscle_car_-_low-poly/scene.web.gltf' },
-      { key:'trafficLight', url: 'australian_traffic_light__pedestrain_light/scene.web.gltf' }
-    ];
+    // the chosen car + every small Kenney car (the muscle car only if chosen)
+    var jobs = CARS.filter(function(c){ return c.id === carId || !c.noWheels; }).map(function(c){ return { key: 'car:' + c.id, car: c }; });
+    jobs.push({ key: 'trafficLight', url: 'australian_traffic_light__pedestrain_light/scene.web.gltf' });
     var progress = {}, failed = 0, remaining = jobs.length;
     function report(){
       var sum = 0;
       jobs.forEach(function(j){ sum += progress[j.key] || 0; });
       setLoad(sum / jobs.length, 'Loading 3D models… ' + Math.round(sum / jobs.length * 100) + '%');
     }
-    function done(){
+    function done(ok){
+      if (!ok) failed++;
       remaining--;
       report();
       if (remaining <= 0){
@@ -833,22 +927,27 @@
         setLoad(1, failed ? 'Ready — ' + failed + ' model(s) unavailable, using simple shapes' : 'Ready');
       }
     }
+    function prog(job){ return function(xhr){
+      if (xhr && xhr.lengthComputable && xhr.total){ progress[job.key] = Math.min(0.99, xhr.loaded / xhr.total); report(); }
+    }; }
     jobs.forEach(function(job){
-      loader.load(job.url, function(gltf){
+      if (job.car){
+        loadCarModel(job.car, function(sceneObj){ progress[job.key] = 1; done(!!sceneObj); }, prog(job));
+        return;
+      }
+      gltfLoader.load(job.url, function(gltf){
         ASSETS[job.key] = gltf.scene;
         progress[job.key] = 1;
-        done();
-      }, function(xhr){
-        if (xhr && xhr.lengthComputable && xhr.total) { progress[job.key] = Math.min(0.99, xhr.loaded / xhr.total); report(); }
-      }, function(err){
-        console.warn('[assets] ' + job.key + ' failed to load — falling back to procedural. ' +
-          'If you opened this file directly, serve it over http:// instead (e.g. `python3 -m http.server`).', err);
-        progress[job.key] = 1; failed++;
-        done();
+        done(true);
+      }, prog(job), function(err){
+        console.warn('[assets] ' + job.key + ' failed to load — skipping.', err);
+        progress[job.key] = 1;
+        done(false);
       });
     });
   }
   loadAssets();
+
 
   // ---------------------------------------------------------------
   // Cheap, immediate setup: renderer / scene / camera / lights /
@@ -954,7 +1053,7 @@
   var mmCanvas, mmCtx, MM_SCALE;
   var promptEl, promptTextEl, nearestStation = null;
   var clock, worldBuilt = false;
-  var speedEl = $('speed-val'), locEl = $('location-readout');
+  var speedEl = $('speed-val'), locEl = $('location-readout'), gearEl = $('gear-val'), rpmEl = $('rpm-bar').firstElementChild;
 
   // ---------------------------------------------------------------
   // Street cross-section (1 unit ≈ 1 metre):
@@ -965,9 +1064,6 @@
   var ROAD_HALF = 5.0, CURB_W = 0.35, CURB_H = 0.16, SIDEWALK_W = 3.0;
   var STREET_EDGE = ROAD_HALF + CURB_W;
   var SIDEWALK_OUTER = STREET_EDGE + SIDEWALK_W;
-  var CAR_HALF = 1.15;
-  var BOUND_LIMIT = ROAD_HALF - CAR_HALF + 0.1;   // keep wheels off the curb
-  var speed = 0, MAX_SPEED = 26, ACCEL = 17, BRAKE = 27, FRICTION = 10, TURN_RATE = 2.4;
 
   var HUB_RADIUS = 26;          // town-square roundabout (centre-line radius)
   var CITY_DIST = 150;          // town square → city centre
@@ -1790,47 +1886,305 @@
     return sprite;
   }
 
-  // Keep the car on the union of all road surfaces: find the closest
-  // centre-line point across every road and clamp to BOUND_LIMIT from
-  // it. Scraping a curb bleeds speed instead of stopping dead.
+  // ---------------------------------------------------------------
+  // Car rig: the visual car (body that pitches/rolls, wheels that
+  // spin and steer, brake/reverse lights) built from a model.
+  // ---------------------------------------------------------------
+  var carRig = null;
+
+  function buildCarRig(spec){
+    var model = ASSETS.cars[spec.id];
+    var body = new THREE.Group();
+    var rig = { spec: spec, body: body, wheels: [], wheelbase: 2.7, halfWidth: 1.0, radius: 0.35, lights: null };
+    var V3 = THREE.Vector3;
+
+    if (model){
+      var m = model.clone(true);
+      m.position.set(0,0,0); m.quaternion.identity(); m.scale.set(1,1,1);
+      m.updateMatrixWorld(true);
+      var raw = new THREE.Box3().setFromObject(m).getSize(new V3());
+      if (raw.x > raw.z) m.rotation.y = Math.PI/2;
+      if (spec.flip) m.rotation.y += Math.PI;
+      m.updateMatrixWorld(true);
+      var size = new THREE.Box3().setFromObject(m).getSize(new V3());
+      m.scale.setScalar(spec.length / size.z);
+      m.updateMatrixWorld(true);
+      var box = new THREE.Box3().setFromObject(m), ctr = box.getCenter(new V3());
+      m.position.x -= ctr.x; m.position.z -= ctr.z; m.position.y -= box.min.y;
+      m.updateMatrixWorld(true);
+      m.traverse(function(o){ if (o.isMesh){ o.castShadow = true; o.receiveShadow = true; } });
+
+      if (!spec.noWheels){
+        var found = [];
+        m.traverse(function(o){ if (/^wheel/i.test(o.name)) found.push(o); });
+        found.forEach(function(w){
+          // re-parent each wheel under a pivot at its hub so it can
+          // spin about the axle and steer about the vertical
+          var pivot = new THREE.Group();
+          pivot.position.copy(w.position);
+          w.parent.add(pivot);
+          pivot.add(w);
+          w.position.set(0,0,0);
+          rig.wheels.push({ pivot: pivot, front: /front/i.test(w.name) });
+        });
+        m.updateMatrixWorld(true);
+        if (rig.wheels.length){
+          var wb = new THREE.Box3().setFromObject(rig.wheels[0].pivot);
+          rig.radius = Math.max(0.2, (wb.max.y - wb.min.y) / 2);
+          var zf = [], zb = [];
+          rig.wheels.forEach(function(w){
+            var p = new V3(); w.pivot.getWorldPosition(p);
+            (w.front ? zf : zb).push(p.z);
+          });
+          if (zf.length && zb.length) rig.wheelbase = Math.max(1.8, Math.abs(zf[0] - zb[0]));
+        }
+      }
+      body.add(m);
+      box = new THREE.Box3().setFromObject(m);
+      rig.halfWidth = (box.max.x - box.min.x) / 2;
+      rig.box = box;
+    } else {
+      // stand-in when models can't load (e.g. opened via file://)
+      var paint = new THREE.MeshStandardMaterial({ color: 0xc23b2e, roughness: 0.35, metalness: 0.4 });
+      var shell = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.6, 4.3), paint);
+      shell.position.y = 0.65; shell.castShadow = true; body.add(shell);
+      var cabin = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.55, 2.1), new THREE.MeshStandardMaterial({ color: 0x151a22, roughness: 0.2, metalness: 0.6 }));
+      cabin.position.set(0, 1.2, -0.25); cabin.castShadow = true; body.add(cabin);
+      var wheelGeo = new THREE.CylinderGeometry(0.36, 0.36, 0.3, 16);
+      wheelGeo.rotateZ(Math.PI/2);
+      var wheelMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 });
+      [[-0.95,1.35,true],[0.95,1.35,true],[-0.95,-1.35,false],[0.95,-1.35,false]].forEach(function(p){
+        var pivot = new THREE.Group(); pivot.position.set(p[0], 0.36, p[1]);
+        var w = new THREE.Mesh(wheelGeo, wheelMat); w.castShadow = true;
+        pivot.add(w); body.add(pivot);
+        rig.wheels.push({ pivot: pivot, front: p[2] });
+      });
+      rig.radius = 0.36; rig.wheelbase = 2.7; rig.halfWidth = 1.0;
+      rig.box = new THREE.Box3(new V3(-0.95, 0, -2.15), new V3(0.95, 1.5, 2.15));
+    }
+
+    // brake + reverse lights on the tail
+    var b = rig.box, w = b.max.x - b.min.x, hgt = b.max.y - b.min.y;
+    var brakeMat = new THREE.MeshBasicMaterial({ color: 0x4a0606 });
+    var revMat = new THREE.MeshBasicMaterial({ color: 0x1a1a1a });
+    var lampGeo = new THREE.PlaneGeometry(w*0.18, hgt*0.07);
+    [-1, 1].forEach(function(s){
+      var l = new THREE.Mesh(lampGeo, brakeMat);
+      l.position.set(s*w*0.3, b.min.y + hgt*0.47, b.min.z - 0.02); l.rotation.y = Math.PI; body.add(l);
+      var r = new THREE.Mesh(lampGeo, revMat);
+      r.scale.set(0.45, 1, 1);
+      r.position.set(s*w*0.12, b.min.y + hgt*0.47, b.min.z - 0.02); r.rotation.y = Math.PI; body.add(r);
+    });
+    rig.lights = { brake: brakeMat, reverse: revMat };
+    return rig;
+  }
+
+  function installCarRig(spec){
+    if (carRig) car.remove(carRig.body);
+    carRig = buildCarRig(spec);
+    car.add(carRig.body);
+  }
+
+  function switchCar(dir){
+    cycleCarId(dir);
+    var spec = CAR_BY_ID[carId];
+    toast('Loading ' + spec.name + '…');
+    loadCarModel(spec, function(){
+      if (carId !== spec.id) return;          // user kept cycling meanwhile
+      installCarRig(spec);
+      toast(spec.name + ' — top speed ' + Math.round(spec.top * 3.6) + ' km/h');
+    });
+  }
+
+  // ---------------------------------------------------------------
+  // Driving physics — fixed 120 Hz steps, so the car behaves the same
+  // at any frame rate.
+  //
+  //  • Engine force falls off toward top speed; rolling resistance +
+  //    aero drag slow you when coasting.
+  //  • Steering is a bicycle model: yaw rate = v·tan(steer)/wheelbase,
+  //    with less steering lock at speed. No turning on the spot.
+  //  • Velocity is tracked separately from heading; tyre grip bleeds
+  //    off sideways slide. The handbrake (Space) drops rear grip so
+  //    you can drift.
+  //  • The car stays on the union of road surfaces; hitting a curb
+  //    removes the velocity going into it, so you glance off & slide.
+  // ---------------------------------------------------------------
+  var CS = { vx:0, vz:0, vF:0, steer:0, angle:0, longAcc:0, latAcc:0, pitch:0, roll:0, spin:0,
+             braking:false, reversing:false, gas:false, slip:0, impact:0, shake:0, rpm:0.12, gear:'N' };
+  var STEP = 1/120, accum = 0;
   var _probe = { x:0, z:0 }, _best = { x:0, z:0 };
-  function enforceTrackBounds(dt){
+
+  function physicsStep(h){
+    var sp = carRig.spec, locked = !!openOverlay;
+    var th = car.rotation.y;
+    var fx = Math.sin(th), fz = Math.cos(th);        // forward
+    var rx = -Math.cos(th), rz = Math.sin(th);       // driver's right
+    var vF = CS.vx*fx + CS.vz*fz, vR = CS.vx*rx + CS.vz*rz;
+    var gas = !locked && input.forward, rev = !locked && input.backward, hand = !locked && input.handbrake;
+
+    var a = 0, braking = false, reversing = false;
+    if (gas){
+      if (vF < -0.5){ a = sp.brake; braking = true; }
+      else a = sp.accel * Math.max(0, 1 - Math.pow(Math.max(0, vF) / sp.top, 2));
+    } else if (rev){
+      if (vF > 0.5){ a = -sp.brake; braking = true; }
+      else { var rTop = sp.top * 0.3; a = -sp.accel * 0.55 * Math.max(0, 1 - Math.pow(Math.min(0, vF) / rTop, 2)); reversing = true; }
+    } else if (locked && Math.abs(vF) > 0.05){
+      a = -Math.sign(vF) * sp.brake * 0.5; braking = true;
+    }
+    var drag = 0.8 + 0.0035 * vF * vF;               // rolling + aero
+    if (hand){ drag += 6.5; braking = true; }
+    var before = vF;
+    vF += a * h;
+    var dd = drag * h;
+    if (Math.abs(vF) <= dd && !gas && !rev) vF = 0; else vF -= Math.sign(vF) * dd;
+    if (braking && before !== 0 && vF !== 0 && Math.sign(vF) !== Math.sign(before)) vF = 0;   // brakes stop, never reverse
+
+    // steering (self-centres faster than it turns in)
+    var target = locked ? 0 : (input.left ? 1 : 0) - (input.right ? 1 : 0);
+    CS.steer += (target - CS.steer) * Math.min(1, (target === 0 ? 8 : 4.5) * h);
+    var lock = sp.steer / (1 + (vF*vF) / (17*17));
+    var ang = CS.steer * lock;
+    var yawRate = vF * Math.tan(ang) / carRig.wheelbase;
+    // tyres can only give so much sideways force (≈ grip × 1.15 m/s²):
+    // ask for more and the car understeers instead of pivoting
+    var maxLat = sp.grip * 1.15 * (hand ? 1.7 : 1);
+    if (Math.abs(vF) > 1){
+      var cap = maxLat / Math.abs(vF);
+      if (Math.abs(yawRate) > cap) yawRate = Math.sign(yawRate) * cap;
+    }
+    if (hand && Math.abs(vF) > 4) yawRate *= 1.25;     // handbrake: rear steps out
+
+    // tyre grip
+    vR *= Math.exp(-(hand ? 1.4 : sp.grip) * h);
+
+    CS.vx = fx*vF + rx*vR; CS.vz = fz*vF + rz*vR;
+    car.rotation.y = th + yawRate * h;
+    car.position.x += CS.vx * h; car.position.z += CS.vz * h;
+
+    // stay on the road
     var best = Infinity, px = car.position.x, pz = car.position.z;
     for (var i=0;i<roads.length;i++){
       var d = closestOnRoad(roads[i], px, pz, _probe);
       if (d < best){ best = d; _best.x = _probe.x; _best.z = _probe.z; }
     }
-    if (best > BOUND_LIMIT && best < Infinity){
-      var k = BOUND_LIMIT / best;
-      car.position.x = _best.x + (px - _best.x)*k;
-      car.position.z = _best.z + (pz - _best.z)*k;
-      speed *= Math.pow(0.15, dt || 0.016);
+    var limit = ROAD_HALF - carRig.halfWidth - 0.12;
+    if (best > limit && best < Infinity){
+      var nx = (px - _best.x) / best, nz = (pz - _best.z) / best;
+      car.position.x = _best.x + nx*limit; car.position.z = _best.z + nz*limit;
+      var vn = CS.vx*nx + CS.vz*nz;
+      if (vn > 0){
+        CS.vx -= nx*vn*1.25; CS.vz -= nz*vn*1.25;     // small bounce off the curb
+        if (vn > 2.5) CS.impact = Math.max(CS.impact, vn);
+      }
+      var scrape = Math.exp(-1.1*h);
+      CS.vx *= scrape; CS.vz *= scrape;
+      vF = CS.vx*fx + CS.vz*fz;
     }
+
+    var la = (vF - CS.vF) / h;
+    CS.longAcc += (la - CS.longAcc) * Math.min(1, 10*h);
+    CS.latAcc += (vF*yawRate - CS.latAcc) * Math.min(1, 10*h);
+    CS.vF = vF; CS.angle = ang; CS.slip = Math.abs(vR);
+    CS.spin += vF * h / carRig.radius;
+    CS.braking = braking; CS.reversing = reversing && vF < -0.2; CS.gas = gas;
+  }
+
+  var GEAR_TOPS = [0.2, 0.37, 0.55, 0.76, 1.0];    // fraction of top speed per gear
+  function updateGear(dt){
+    var sp = carRig.spec, v = CS.vF, rpm;
+    if (v < -0.2){ CS.gear = 'R'; rpm = 0.2 + 0.7 * Math.min(1, -v / (sp.top*0.3)); }
+    else if (Math.abs(v) < 0.3 && !CS.gas){ CS.gear = 'N'; rpm = 0.12; }
+    else {
+      var f = Math.max(0, v) / sp.top, g = 0;
+      while (g < GEAR_TOPS.length-1 && f > GEAR_TOPS[g]) g++;
+      var lo = g ? GEAR_TOPS[g-1] : 0, hi = GEAR_TOPS[g];
+      rpm = 0.22 + 0.78 * Math.min(1, (f - lo) / (hi - lo));
+      if (CS.gas && g === 0) rpm = Math.max(rpm, 0.38);
+      CS.gear = String(g + 1);
+    }
+    CS.rpm += (rpm - CS.rpm) * Math.min(1, dt * 10);
   }
 
   function updateCar(dt){
-    var locked = !!openOverlay;
-    if (!locked){
-      if (input.forward) speed += ACCEL * dt;
-      else if (input.backward) speed -= BRAKE * dt;
-      else {
-        if (speed > 0) speed = Math.max(0, speed - FRICTION*dt);
-        else speed = Math.min(0, speed + FRICTION*dt);
-      }
-      speed = Math.max(-MAX_SPEED*0.5, Math.min(MAX_SPEED, speed));
-      var turnDir = 0;
-      if (input.left) turnDir += 1;
-      if (input.right) turnDir -= 1;
-      var speedRatio = Math.min(1, Math.abs(speed)/MAX_SPEED);
-      car.rotation.y += turnDir * TURN_RATE * dt * (0.35 + 0.65*speedRatio) * (speed < 0 ? -1 : 1);
-    } else {
-      speed = speed > 0 ? Math.max(0, speed - FRICTION*2*dt) : Math.min(0, speed + FRICTION*2*dt);
+    accum += Math.min(dt, 0.1);
+    var n = 0;
+    while (accum >= STEP && n < 14){ physicsStep(STEP); accum -= STEP; n++; }
+    if (n === 14) accum = 0;
+    updateGear(dt);
+
+    // body pitches under braking/acceleration and rolls in corners
+    var k = 1 - Math.exp(-dt * 7);
+    var tp = THREE.MathUtils.clamp(-CS.longAcc * 0.0055, -0.045, 0.045);
+    var tr = THREE.MathUtils.clamp(CS.latAcc * 0.0042, -0.065, 0.065);
+    CS.pitch += (tp - CS.pitch) * k; CS.roll += (tr - CS.roll) * k;
+    carRig.body.rotation.set(CS.pitch, 0, CS.roll);
+    for (var i=0;i<carRig.wheels.length;i++){
+      var w = carRig.wheels[i];
+      w.pivot.rotation.set(CS.spin, w.front ? CS.angle : 0, 0, 'YXZ');
     }
-    forwardVec.set(0,0,1).applyQuaternion(car.quaternion);
-    car.position.addScaledVector(forwardVec, speed*dt);
-    enforceTrackBounds(dt);
-    speedEl.textContent = Math.round(Math.abs(speed) * 6);
+    carRig.lights.brake.color.setHex(CS.braking ? 0xff2020 : 0x4a0606);
+    carRig.lights.reverse.color.setHex(CS.reversing ? 0xf4f1e6 : 0x1a1a1a);
+
+    speedEl.textContent = Math.round(Math.abs(CS.vF) * 3.6);
+    gearEl.textContent = CS.gear;
+    rpmEl.style.width = Math.round(CS.rpm * 100) + '%';
+    rpmEl.style.background = CS.rpm > 0.88 ? '#ff6b6b' : 'var(--accent)';
+    updateEngineAudio();
   }
+
+  // ---------------------------------------------------------------
+  // Engine sound: a tiny WebAudio synth (two detuned oscillators
+  // through a low-pass filter) tracking RPM and throttle, plus filtered
+  // noise for tyre squeal. Starts on the Start Engine click; M mutes.
+  // ---------------------------------------------------------------
+  var AUD = { ctx: null, on: true };
+  try { AUD.on = localStorage.getItem('town.sound') !== 'off'; } catch(e){}
+  function startEngineAudio(){
+    if (AUD.ctx || !(window.AudioContext || window.webkitAudioContext)) return;
+    try {
+      var ctx = new (window.AudioContext || window.webkitAudioContext)();
+      var master = ctx.createGain(); master.gain.value = AUD.on ? 1 : 0; master.connect(ctx.destination);
+      var filter = ctx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 600; filter.Q.value = 4;
+      var eng = ctx.createGain(); eng.gain.value = 0.0;
+      filter.connect(eng); eng.connect(master);
+      var o1 = ctx.createOscillator(); o1.type = 'sawtooth';
+      var o2 = ctx.createOscillator(); o2.type = 'square'; o2.detune.value = -1200 + 8;
+      var o3 = ctx.createOscillator(); o3.type = 'sine';
+      [o1, o2, o3].forEach(function(o){ o.connect(filter); o.start(); });
+      var len = ctx.sampleRate, buf = ctx.createBuffer(1, len, ctx.sampleRate), data = buf.getChannelData(0);
+      for (var i=0;i<len;i++) data[i] = Math.random()*2 - 1;
+      var noise = ctx.createBufferSource(); noise.buffer = buf; noise.loop = true;
+      var band = ctx.createBiquadFilter(); band.type = 'bandpass'; band.frequency.value = 1700; band.Q.value = 2.5;
+      var squeal = ctx.createGain(); squeal.gain.value = 0;
+      noise.connect(band); band.connect(squeal); squeal.connect(master); noise.start();
+      AUD.ctx = ctx; AUD.master = master; AUD.filter = filter; AUD.eng = eng; AUD.o = [o1, o2, o3]; AUD.squeal = squeal;
+    } catch(e){ console.warn('[audio] unavailable', e); }
+  }
+  function updateEngineAudio(){
+    if (!AUD.ctx) return;
+    var t = AUD.ctx.currentTime, rpm = CS.rpm;
+    var f = 34 + rpm * 150;
+    AUD.o[0].frequency.setTargetAtTime(f, t, 0.03);
+    AUD.o[1].frequency.setTargetAtTime(f, t, 0.03);
+    AUD.o[2].frequency.setTargetAtTime(f * 0.5, t, 0.03);
+    AUD.filter.frequency.setTargetAtTime(300 + rpm * (CS.gas ? 2200 : 900), t, 0.05);
+    var vol = openOverlay ? 0.015 : 0.035 + (CS.gas ? 0.06 : 0.015) + rpm * 0.03;
+    AUD.eng.gain.setTargetAtTime(vol, t, 0.06);
+    var sq = Math.max(0, Math.min(1, (CS.slip - 2.2) / 5)) * (Math.abs(CS.vF) > 3 ? 0.09 : 0);
+    AUD.squeal.gain.setTargetAtTime(sq, t, 0.05);
+  }
+  function setSound(on){
+    AUD.on = on;
+    try { localStorage.setItem('town.sound', on ? 'on' : 'off'); } catch(e){}
+    if (AUD.master) AUD.master.gain.setTargetAtTime(on ? 1 : 0, AUD.ctx.currentTime, 0.05);
+    $('hud-sound-btn').textContent = on ? '♪ Sound on' : '♪ Sound off';
+  }
+  document.addEventListener('visibilitychange', function(){
+    if (!AUD.ctx) return;
+    if (document.hidden) AUD.ctx.suspend(); else AUD.ctx.resume();
+  });
 
   // Which city (if any) is the car in? Drives the location readout
   // and which section the page view scrolls to.
@@ -1875,7 +2229,7 @@
   function placeCarAt(pt, nextPt){
     car.position.set(pt.x, 0, pt.z);
     car.rotation.y = Math.atan2(nextPt.x - pt.x, nextPt.z - pt.z);
-    speed = 0;
+    CS.vx = CS.vz = CS.vF = CS.steer = CS.longAcc = CS.latAcc = 0;
     lookYaw = 0; lookPitch = 0;
     var desired = camOffset.clone().applyQuaternion(car.quaternion).add(car.position);
     camera.position.copy(desired);
@@ -1899,19 +2253,30 @@
     toast('Back at the town square');
   };
 
+  var _camFwd = new THREE.Vector3();
   function updateCamera(dt){
     if (!isDragging){
       lookYaw = THREE.MathUtils.lerp(lookYaw, 0, 1 - Math.pow(0.0005, dt));
       lookPitch = THREE.MathUtils.lerp(lookPitch, 0, 1 - Math.pow(0.0005, dt));
     }
-    var lookEuler = new THREE.Euler(lookPitch, lookYaw, 0, 'YXZ');
-    var lookQuat = new THREE.Quaternion().setFromEuler(lookEuler);
-    var desired = camOffset.clone()
-      .applyQuaternion(lookQuat)
-      .applyQuaternion(car.quaternion)
-      .add(car.position);
-    camera.position.lerp(desired, 1 - Math.pow(0.001, dt));
-    camTarget.copy(car.position).add(new THREE.Vector3(0,1.2,0));
+    var v = Math.abs(CS.vF);
+    // pull back, rise and widen the lens with speed
+    camOffset.set(0, 3.5 + v*0.03, -(7.2 + v*0.085));
+    var fov = 58 + Math.min(14, v*0.33);
+    if (Math.abs(camera.fov - fov) > 0.05){ camera.fov += (fov - camera.fov) * Math.min(1, dt*3); camera.updateProjectionMatrix(); }
+    var lookQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(lookPitch, lookYaw, 0, 'YXZ'));
+    var desired = camOffset.clone().applyQuaternion(lookQuat).applyQuaternion(car.quaternion).add(car.position);
+    camera.position.lerp(desired, 1 - Math.pow(0.0015, dt));
+    // bump shake when you clip a curb hard
+    if (CS.impact > 0){ CS.shake = Math.min(0.45, CS.shake + CS.impact*0.05); CS.impact = 0; }
+    if (CS.shake > 0.001){
+      camera.position.x += (Math.random()-0.5)*CS.shake;
+      camera.position.y += (Math.random()-0.5)*CS.shake*0.6;
+      CS.shake *= Math.pow(0.02, dt);
+    }
+    _camFwd.set(Math.sin(car.rotation.y), 0, Math.cos(car.rotation.y));
+    camTarget.copy(car.position).addScaledVector(_camFwd, 2 + v*0.08);
+    camTarget.y += 1.1;
     camera.lookAt(camTarget);
   }
 
@@ -1987,6 +2352,10 @@
     window.__town = {
       scene: scene, camera: camera, renderer: renderer,
       get car(){ return car; },
+      get state(){ return CS; },
+      // advance the physics by `sec` seconds of simulated time
+      sim: function(sec){ for (var i=0, n=Math.round(sec/STEP); i<n; i++) physicsStep(STEP); updateGear(1); return { kmh: Math.abs(CS.vF)*3.6, gear: CS.gear, slip: CS.slip, x: car.position.x, z: car.position.z, yaw: car.rotation.y }; },
+      input: input,
       topDown: function(x, z, h){
         debugCam = true;
         camera.position.set(x, h, z + 0.01);
@@ -2240,51 +2609,7 @@
 
     // ---- Car ----
     car = new THREE.Group();
-    if (ASSETS.car){
-      var carModel = ASSETS.car.clone(true);
-      carModel.position.set(0,0,0);
-      carModel.quaternion.identity();
-      carModel.scale.set(1,1,1);
-      carModel.updateMatrixWorld(true);
-      var rawSize = new THREE.Box3().setFromObject(carModel).getSize(new THREE.Vector3());
-      if (rawSize.x > rawSize.z) carModel.rotation.y = Math.PI/2;
-      carModel.updateMatrixWorld(true);
-      var normSize = new THREE.Box3().setFromObject(carModel).getSize(new THREE.Vector3());
-      var carScale = 4.4 / normSize.z;
-      carModel.scale.setScalar(carScale);
-      carModel.updateMatrixWorld(true);
-      var carBox = new THREE.Box3().setFromObject(carModel);
-      var carCenter = carBox.getCenter(new THREE.Vector3());
-      carModel.position.x -= carCenter.x;
-      carModel.position.z -= carCenter.z;
-      carModel.position.y -= carBox.min.y;
-      carModel.rotation.y += Math.PI;
-      carModel.traverse(function(o){ if (o.isMesh){ o.castShadow = true; o.receiveShadow = true; } });
-      car.add(carModel);
-    } else {
-      var body = new THREE.Mesh(
-        new THREE.BoxGeometry(2.2, 0.9, 4.2),
-        new THREE.MeshStandardMaterial({ color: 0x39ff88, emissive: 0x0c3324, emissiveIntensity:0.4, roughness:0.35, metalness:0.3 })
-      );
-      body.position.y = 0.75; body.castShadow = true; car.add(body);
-      var cabin = new THREE.Mesh(
-        new THREE.BoxGeometry(1.5, 0.6, 2.0),
-        new THREE.MeshStandardMaterial({ color: 0x0b1613, roughness:0.2, metalness:0.6 })
-      );
-      cabin.position.set(0, 1.35, -0.2); cabin.castShadow = true; car.add(cabin);
-      var wheelGeo = new THREE.CylinderGeometry(0.45, 0.45, 0.4, 16);
-      var wheelMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness:0.9 });
-      [[-1.15,0.45,1.4],[1.15,0.45,1.4],[-1.15,0.45,-1.4],[1.15,0.45,-1.4]].forEach(function(p){
-        var w = new THREE.Mesh(wheelGeo, wheelMat);
-        w.rotation.z = Math.PI/2; w.position.set(p[0],p[1],p[2]); w.castShadow = true; car.add(w);
-      });
-      var headlightGeo = new THREE.SphereGeometry(0.14, 8, 8);
-      var headlightMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-      [[-0.7,0.75,2.05],[0.7,0.75,2.05]].forEach(function(p){
-        var h = new THREE.Mesh(headlightGeo, headlightMat);
-        h.position.set(p[0],p[1],p[2]); car.add(h);
-      });
-    }
+    installCarRig(CAR_BY_ID[carId]);
     // headlight beam so the road ahead is readable at dusk
     var beam = new THREE.SpotLight(0xfff1d6, 1.4, 38, 0.5, 0.6, 1);
     beam.position.set(0, 1.0, 2.0);
@@ -2312,6 +2637,7 @@
     bindHold('btn-brake', function(v){ input.backward = v; });
     bindHold('btn-left', function(v){ input.left = v; });
     bindHold('btn-right', function(v){ input.right = v; });
+    bindHold('btn-hand', function(v){ input.handbrake = v; });
     $('btn-interact').addEventListener('click', function(){ tryInteract(); });
     var coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
     if (coarse || 'ontouchstart' in window) $('touch-controls').classList.add('active');
@@ -2321,6 +2647,11 @@
     promptTextEl = $('station-prompt-text');
     promptEl.addEventListener('click', function(){ tryInteract(); });
     $('hud-reset-btn').addEventListener('click', function(){ resetCar(); });
+    changeCar = switchCar;
+    toggleSound = function(){ startEngineAudio(); setSound(!AUD.on); toast(AUD.on ? 'Sound on' : 'Sound off'); };
+    $('hud-car-btn').addEventListener('click', function(e){ changeCar(1); e.currentTarget.blur(); });
+    $('hud-sound-btn').addEventListener('click', function(e){ toggleSound(); e.currentTarget.blur(); });
+    setSound(AUD.on);
     $('fast-travel').innerHTML = SECTIONS.map(function(s, i){
       return '<button data-go="' + s.key + '" style="color:' + s.color + '" title="Fast travel to ' + s.label + ' (' + (i+1) + ')">' +
         '<i style="background:' + s.color + '"></i><span style="color:var(--ink)">' + s.label + '</span><kbd>' + (i+1) + '</kbd></button>';
@@ -2340,6 +2671,7 @@
   var startBtn = $('start-btn');
   startBtn.addEventListener('click', function(){
     startBtn.disabled = true;
+    startEngineAudio();          // needs this user click to be allowed
     $('fatal-error').style.display = 'none';
     function go(){
       startBtn.textContent = 'Building town…';

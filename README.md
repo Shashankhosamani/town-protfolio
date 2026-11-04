@@ -53,6 +53,9 @@ window.PORTFOLIO = {
 |---------------------------|-----------------------------|--------------------------|
 | Accelerate / brake        | `W` `S` or `↑` `↓`          | ▲ ▼                      |
 | Steer                     | `A` `D` or `←` `→`          | ◀ ▶                      |
+| Handbrake / drift         | `Space`                     | **DRIFT**                |
+| Change car                | `C` (or pick on the intro)  | ⇄ Car                    |
+| Engine sound on / off     | `M`                         | ♪ Sound                  |
 | Look around               | drag mouse                  | drag                     |
 | Enter shop                | `E` or `Enter`              | **ENTER** (lights up)    |
 | Fast travel to a city     | `1`–`4`                     | chips at top-left        |
@@ -79,7 +82,8 @@ The old `portfolio-track-demo.html` URL redirects to `index.html`.
 ```
 index.html        app: intro, HUD, panels, page view, 3D world
 content.js        ← all portfolio copy (edit this)
-dodge_challenger_-_muscle_car_-_low-poly/       player car                 (used)
+models/cars/                                    6 drivable Kenney cars (CC0) + shared texture
+dodge_challenger_-_muscle_car_-_low-poly/       "Muscle car" option, loaded only if chosen
 australian_traffic_light__pedestrain_light/     traffic lights at junctions (used)
 road_modular/, city_scene/, neighbourhood_city_modular_lowpoly/, modular_bridge…/,
 1998_ducati_748/, 2018_bmw_r_ninet_pure/, ford_*/                          (not used)
@@ -113,14 +117,29 @@ The page loads only the `scene.web.gltf` files, which use small textures from `t
   Each area has its own mix of styles: plaster and brick around the town square and along the spokes, offices and glass towers on each city's avenue, and a mix on the city ring roads. Every building of a material is merged into one mesh, so the whole town is about 20 draw calls.
 
   A building is only placed if all four corners of its footprint clear every sidewalk and other buildings. If the first size doesn't fit, smaller footprints are tried before the spot is skipped.
-- **Collision**: the car stays on the union of all road surfaces. Its distance to the nearest centre-line is clamped so the wheels stay off the curb, and scraping a curb slows the car down.
+- **Collision**: the car stays on the union of all road surfaces, with its distance from the nearest centre-line limited so the wheels stay off the curb. Hitting the curb removes the part of the velocity going into it, so the car glances off and slides along. A hard hit shakes the camera.
 - **Shops**: a shop opens its panel when the car is within 13 units of it.
 - **Debug view**: add `?debug` to the URL, then use `__town.topDown(x, z, height)` in the console for a bird's-eye view of any area. `__town.follow()` returns to the chase camera.
+
+### How the driving works (`physicsStep` / `updateCar` in `index.html`)
+
+The physics runs in fixed **120 Hz steps**, so the car behaves the same at any frame rate. One unit is one metre.
+
+- **Cars**: there are seven, defined in `CARS`. Each one has its own top speed, acceleration, braking, tyre grip and steering lock. The Kenney models have separate wheel nodes, so each wheel is placed on a pivot at its hub, where it spins with distance travelled and the front wheels turn with the steering.
+- **Engine**: force tapers off toward top speed. Rolling resistance and aerodynamic drag slow the car when you lift off. Braking stops the car without reversing; keep holding `S` once stopped to reverse.
+- **Steering**: this uses a bicycle model, where turn rate = speed × tan(steering angle) ÷ wheelbase. The car can't turn on the spot, and there's less steering lock at speed. Turn rate is also capped by tyre grip (about 0.9 g for the sedan). Steering too hard at speed makes the car **understeer** wide instead of turning impossibly tight.
+- **Drift**: velocity is tracked separately from heading, and grip bleeds off sideways slide. The handbrake drops grip and lets the rear step out.
+- **Feel**: the body pitches under braking and acceleration and rolls in corners, and there are brake and reverse lights. The chase camera pulls back and widens with speed and looks ahead.
+- **HUD**: shows real km/h, the gear (R/N/1–5 from simulated gear ratios) and an RPM bar.
+- **Sound**: a small WebAudio synth (detuned oscillators through a low-pass filter) follows RPM and throttle, with filtered noise for tyre squeal. It starts when you click *Start Engine*, and the on/off setting is remembered.
+
+With `?debug` in the URL, `__town.sim(seconds)` advances the physics instantly, and `__town.input` / `__town.state` let you script or inspect a drive.
 
 ## Credits & licences
 
 These models are used under their Sketchfab licences. Credits also appear in the in-app page view under **Credits**.
 
+- **Car Kit** by [Kenney](https://kenney.nl/assets/car-kit): sports sedan, hot hatch, race car, police cruiser, taxi and luxury SUV. **CC0 (public domain)**: free for any use, no attribution required. See `models/cars/License.txt`.
 - "Dodge Challenger – Muscle Car – Low-Poly" by Allay Design, Sketchfab Standard
 - "Australian Traffic Light & Pedestrian Light" by JoTrain The Aussie, Sketchfab Standard
 
