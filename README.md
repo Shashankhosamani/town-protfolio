@@ -102,7 +102,17 @@ The page loads only the `scene.web.gltf` files, which use small textures from `t
 - **Junctions**: no junction is placed by hand. On each road, any stretch of curb, sidewalk or edge line that would land on *another* road's asphalt is removed. The exact cut point is found by bisection, so curbs meet in clean L-shaped corners. Crosswalks and stop lines are added automatically where an open road meets another road.
 - **Textures**: asphalt and paving are canvas-generated and use world-space UVs, so overlapping pieces at junctions line up seamlessly.
 - **Street lights**: these are procedural poles with a glowing head and an additive light pool on the road, rather than real lights. That keeps the frame rate up, because about 150 real point lights would make the shaders very slow.
-- **Buildings**: buildings line every street. A building is only placed if all four corners of its footprint are clear of every road's sidewalk and of other buildings, so nothing ends up in a junction or on the inside of a bend.
+- **Buildings**: buildings are procedural, in four styles:
+  - **Brick walk-ups**: brick courses, framed windows with sills and lintels, and sometimes a rooftop water tank.
+  - **Plaster townhouses**: shuttered windows, tinted with each area's palette.
+  - **Concrete offices**: ribbon windows over spandrel panels.
+  - **Glass towers**: curtain-wall glass, often with a setback crown.
+
+  Buildings can have ground-floor shops with lit windows, a door, an awning and a glowing sign. They also get a string course, cornice, parapet and rooftop AC units or stair housings. Window textures tile in units of bays (3 m) and floors (3.2 m), so windows stay the right size on any building. Lit windows are randomised, and office lights fade toward the floor with desk silhouettes.
+
+  Each area has its own mix of styles: plaster and brick around the town square and along the spokes, offices and glass towers on each city's avenue, and a mix on the city ring roads. Every building of a material is merged into one mesh, so the whole town is about 20 draw calls.
+
+  A building is only placed if all four corners of its footprint clear every sidewalk and other buildings. If the first size doesn't fit, smaller footprints are tried before the spot is skipped.
 - **Collision**: the car stays on the union of all road surfaces. Its distance to the nearest centre-line is clamped so the wheels stay off the curb, and scraping a curb slows the car down.
 - **Shops**: a shop opens its panel when the car is within 13 units of it.
 - **Debug view**: add `?debug` to the URL, then use `__town.topDown(x, z, height)` in the console for a bird's-eye view of any area. `__town.follow()` returns to the chase camera.

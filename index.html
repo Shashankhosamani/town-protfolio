@@ -1115,14 +1115,20 @@
   // Batched geometry: every road piece of one material goes into a
   // single mesh, so the whole network is a handful of draw calls.
   // ---------------------------------------------------------------
-  function GeoBatch(){ this.pos = []; this.nrm = []; this.uv = []; this.idx = []; }
-  GeoBatch.prototype.quad = function(a, b, c, d, n, uvScale){
+  function GeoBatch(){ this.pos = []; this.nrm = []; this.uv = []; this.idx = []; this.col = []; }
+  // uv: number → world-space planar UVs at that scale; [u0,v0,u1,v1]
+  // → that rect (a,b,c,d = bottom-left, bottom-right, top-right,
+  // top-left); omitted → 0..1. col: optional [r,g,b] vertex colour.
+  GeoBatch.prototype.quad = function(a, b, c, d, n, uv, col){
     var v = this.pos.length / 3, self = this;
     [a,b,c,d].forEach(function(p, k){
       self.pos.push(p[0], p[1], p[2]);
       self.nrm.push(n[0], n[1], n[2]);
-      if (uvScale) self.uv.push(p[0]/uvScale, p[2]/uvScale);
+      if (typeof uv === 'number') self.uv.push(p[0]/uv, p[2]/uv);
+      else if (uv) self.uv.push(k===1||k===2 ? uv[2] : uv[0], k>=2 ? uv[3] : uv[1]);
       else self.uv.push(k===1||k===2 ? 1 : 0, k>=2 ? 1 : 0);
+      if (col) self.col.push(col[0], col[1], col[2]);
+      else if (self.col.length) self.col.push(1, 1, 1);
     });
     // wind so the face's geometric normal agrees with n (front-facing)
     var ux = b[0]-a[0], uy = b[1]-a[1], uz = b[2]-a[2], wx = c[0]-a[0], wy = c[1]-a[1], wz = c[2]-a[2];
@@ -1135,6 +1141,10 @@
     g.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3));
     g.setAttribute('normal', new THREE.Float32BufferAttribute(this.nrm, 3));
     g.setAttribute('uv', new THREE.Float32BufferAttribute(this.uv, 2));
+    if (this.col.length){
+      while (this.col.length < this.pos.length) this.col.unshift(1);   // quads added before the first coloured one
+      g.setAttribute('color', new THREE.Float32BufferAttribute(this.col, 3));
+    }
     g.setIndex(this.idx);
     var m = new THREE.Mesh(g, mat);
     m.receiveShadow = true;
@@ -1312,52 +1322,338 @@
   }
 
   // ---------------------------------------------------------------
-  // Buildings
   // ---------------------------------------------------------------
-  var buildingTexCache = {};
-  function getBuildingTextures(baseColorHex){
-    if (buildingTexCache[baseColorHex]) return buildingTexCache[baseColorHex];
-    var w=128, h=128;
-    var c1 = document.createElement('canvas'); c1.width=w; c1.height=h;
-    var ctx1 = c1.getContext('2d');
-    ctx1.fillStyle = baseColorHex; ctx1.fillRect(0,0,w,h);
-    var c2 = document.createElement('canvas'); c2.width=w; c2.height=h;
-    var ctx2 = c2.getContext('2d');
-    ctx2.fillStyle = '#000000'; ctx2.fillRect(0,0,w,h);
-    var cols=5, rows=6, cellW=w/cols, cellH=h/rows;
-    for (var r=0;r<rows;r++){
-      for (var col=0;col<cols;col++){
-        if (Math.random() < 0.55){
-          var x = col*cellW + cellW*0.22, y = r*cellH + cellH*0.22;
-          var ww = cellW*0.56, hh = cellH*0.56;
-          ctx1.fillStyle = '#332a1f'; ctx1.fillRect(x,y,ww,hh);
-          var lit = Math.random() < 0.6;
-          ctx2.fillStyle = lit ? '#ffd9a0' : '#0c0c0c';
-          ctx2.fillRect(x,y,ww,hh);
+  // Buildings
+  //
+  // Procedural, realistic-ish buildings in four styles. Facades use
+  // tiling window textures whose UVs are measured in bays (3 m) and
+  // floors (3.2 m), so windows are always the right size whatever the
+  // building's dimensions. Every building of a material is merged into
+  // one batched mesh — a whole town of buildings is ~20 draw calls.
+  // ---------------------------------------------------------------
+  var BAY = 3, FLOOR = 3.2, GROUND = 4.2;
+  var CELLS = 8;   // facade textures hold an 8 × 8 grid of windows
+
+  var STYLES = {
+    //            floors      footprint (bays)       facade colours (brick/office/glass) | tinted (plaster)
+    plaster: { floors:[2,4],  along:[2,4], across:[2,3], shop:0.55 },
+    brick:   { floors:[3,7],  along:[2,4], across:[2,3], shop:0.6 },
+    office:  { floors:[5,10], along:[3,4], across:[2,3], shop:1 },
+    glass:   { floors:[9,18], along:[3,4], across:[3,3], shop:1 }
+  };
+  function randInt(a, b){ return a + Math.floor(Math.random()*(b - a + 1)); }
+  function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+
+  function makeCanvas(w, h){ var c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
+  function finishTex(c, rx, ry){
+    var t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(rx, ry);
+    t.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+    return t;
+  }
+  var WARM = ['#ffcf8a','#ffd9a6','#ffe2b8','#ffc77a','#ffdca0'], COOL = ['#b9c8de','#aebfd8','#d8ccb2','#c4cfdc'];
+  // an office interior: brighter near the ceiling lights, darker desks below
+  function officeGlow(ectx, x, y, w, h){
+    var g = ectx.createLinearGradient(0, y, 0, y + h);
+    var c = pick(COOL);
+    g.addColorStop(0, c); g.addColorStop(0.55, c); g.addColorStop(1, 'rgba(40,40,40,1)');
+    ectx.fillStyle = g; ectx.fillRect(x, y, w, h);
+    ectx.fillStyle = 'rgba(0,0,0,0.35)';                 // desk / partition silhouettes
+    for (var k=0;k<3;k++) ectx.fillRect(x + Math.random()*(w-14), y + h*0.62, 6 + Math.random()*12, h*0.38);
+  }
+
+  // window rect inside a 64px cell + the lit/unlit emissive for it
+  function litWindow(ectx, x, y, w, h, palette, pLit){
+    if (Math.random() > pLit) return;
+    ectx.fillStyle = pick(palette);
+    if (Math.random() < 0.3){   // half-drawn curtain
+      var cut = h * (0.3 + Math.random()*0.4);
+      ectx.fillRect(x, y + cut, w, h - cut);
+      ectx.globalAlpha = 0.35; ectx.fillRect(x, y, w, cut); ectx.globalAlpha = 1;
+    } else ectx.fillRect(x, y, w, h);
+  }
+  function glassGrad(ctx, x, y, w, h, top, bottom){
+    var g = ctx.createLinearGradient(0, y, 0, y + h);
+    g.addColorStop(0, top); g.addColorStop(1, bottom);
+    ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
+  }
+
+  var FACADE_DRAW = {
+    brick: function(ctx, ectx, base){
+      var S = 512;
+      ctx.fillStyle = base; ctx.fillRect(0,0,S,S);
+      for (var y=0; y<S; y+=4){            // brick courses
+        var off = (y/4) % 2 ? 0 : 5;
+        for (var x=-off; x<S; x+=10){
+          ctx.fillStyle = 'rgba(' + (Math.random()<0.5 ? '0,0,0,' : '255,255,255,') + (Math.random()*0.09) + ')';
+          ctx.fillRect(x, y, 9, 3);
+        }
+        ctx.fillStyle = 'rgba(30,22,18,0.35)'; ctx.fillRect(0, y+3, S, 1);
+      }
+      for (var r=0;r<CELLS;r++) for (var c=0;c<CELLS;c++){
+        var cx = c*64, cy = r*64;
+        ctx.fillStyle = '#b9b0a0'; ctx.fillRect(cx+12, cy+50, 40, 4);            // sill
+        ctx.fillStyle = '#8a6c58'; ctx.fillRect(cx+14, cy+8, 36, 4);             // lintel
+        ctx.fillStyle = '#e6dfd0'; ctx.fillRect(cx+15, cy+12, 34, 38);           // frame
+        glassGrad(ctx, cx+18, cy+15, 28, 33, '#3a4558', '#121821');
+        ctx.fillStyle = '#e6dfd0'; ctx.fillRect(cx+31, cy+15, 2, 33); ctx.fillRect(cx+18, cy+29, 28, 2);
+        litWindow(ectx, cx+18, cy+15, 28, 33, WARM, 0.42);
+      }
+    },
+    plaster: function(ctx, ectx){
+      var S = 512;
+      ctx.fillStyle = '#efebe3'; ctx.fillRect(0,0,S,S);
+      speckle(ctx, S, 4000, 0.05, false);
+      for (var r=0;r<CELLS;r++){
+        ctx.fillStyle = 'rgba(0,0,0,0.06)'; ctx.fillRect(0, r*64 + 60, S, 4);      // floor band
+        for (var c=0;c<CELLS;c++){
+          var cx = c*64, cy = r*64;
+          ctx.fillStyle = '#5d6b5a'; ctx.fillRect(cx+12, cy+12, 9, 38); ctx.fillRect(cx+43, cy+12, 9, 38);  // shutters
+          ctx.fillStyle = 'rgba(0,0,0,0.25)';
+          for (var k=0;k<38;k+=4){ ctx.fillRect(cx+12, cy+12+k, 9, 1); ctx.fillRect(cx+43, cy+12+k, 9, 1); }
+          ctx.fillStyle = '#ffffff'; ctx.fillRect(cx+21, cy+11, 22, 40);
+          glassGrad(ctx, cx+23, cy+13, 18, 36, '#3c4757', '#141a22');
+          ctx.fillStyle = '#ffffff'; ctx.fillRect(cx+31, cy+13, 2, 36);
+          ctx.fillStyle = '#d9d3c6'; ctx.fillRect(cx+19, cy+51, 26, 3);
+          litWindow(ectx, cx+23, cy+13, 18, 36, WARM, 0.4);
+        }
+      }
+    },
+    office: function(ctx, ectx, base){
+      var S = 512;
+      ctx.fillStyle = base; ctx.fillRect(0,0,S,S);
+      speckle(ctx, S, 3000, 0.06, true);
+      for (var r=0;r<CELLS;r++){
+        var cy = r*64;
+        ctx.fillStyle = 'rgba(0,0,0,0.18)'; ctx.fillRect(0, cy+46, S, 18);         // spandrel
+        glassGrad(ctx, 0, cy+6, S, 38, '#4a5a6e', '#18202b');                    // ribbon window
+        for (var c=0;c<CELLS;c++){
+          var cx = c*64;
+          ctx.fillStyle = '#6e737a'; ctx.fillRect(cx, cy+6, 3, 38); ctx.fillRect(cx+32, cy+6, 2, 38);
+          if (Math.random() < 0.34) officeGlow(ectx, cx+3, cy+6, 61, 38);
+        }
+      }
+    },
+    glass: function(ctx, ectx, base){
+      var S = 512;
+      for (var r=0;r<CELLS;r++){
+        var run = Math.random() < 0.4;
+        for (var c=0;c<CELLS;c++){
+          var cx = c*64, cy = r*64;
+          glassGrad(ctx, cx, cy, 64, 64, base, '#0b1118');
+          ctx.fillStyle = 'rgba(255,255,255,0.05)';
+          ctx.beginPath(); ctx.moveTo(cx, cy+64); ctx.lineTo(cx+40, cy); ctx.lineTo(cx+52, cy); ctx.lineTo(cx+12, cy+64); ctx.fill();
+          ctx.fillStyle = '#3e4a56'; ctx.fillRect(cx, cy, 3, 64); ctx.fillRect(cx+31, cy, 2, 64); ctx.fillRect(cx, cy+56, 64, 8);
+          if (Math.random() < 0.15) run = !run;                                 // lit floors come in runs
+          if (run && Math.random() < 0.85){ ectx.globalAlpha = 0.45 + Math.random()*0.35; officeGlow(ectx, cx+3, cy, 61, 56); ectx.globalAlpha = 1; }
         }
       }
     }
-    var entry = { map: new THREE.CanvasTexture(c1), emissiveMap: new THREE.CanvasTexture(c2) };
-    buildingTexCache[baseColorHex] = entry;
-    return entry;
-  }
+  };
+  var FACADE_COLORS = {
+    brick:   ['#8e4a36','#7a3f30','#a0644a','#6f5145'],
+    plaster: ['#efebe3'],
+    office:  ['#9a978f','#85837d','#a7a39a'],
+    glass:   ['#3f6280','#3a6a6c','#4a5470']
+  };
 
-  var buildingMatCache = {};
-  function makeBuildingMaterials(baseColorHex){
-    if (buildingMatCache[baseColorHex]) return buildingMatCache[baseColorHex];
-    var tex = getBuildingTextures(baseColorHex);
-    var sideMat = new THREE.MeshStandardMaterial({
-      map: tex.map, emissiveMap: tex.emissiveMap, emissive: 0xffcf8a,
-      emissiveIntensity: 0.85, roughness: 0.85
+  var BLD = null;
+  function buildingKit(){
+    if (BLD) return BLD;
+    BLD = { facade:{}, shop:[], roof:new GeoBatch(), trim:new GeoBatch(), props:new GeoBatch(),
+            awning:new GeoBatch(), sign:new GeoBatch(), tanks:[] };
+    Object.keys(FACADE_COLORS).forEach(function(style){
+      BLD.facade[style] = FACADE_COLORS[style].map(function(base){
+        var c = makeCanvas(512,512), e = makeCanvas(512,512);
+        var ectx = e.getContext('2d'); ectx.fillStyle = '#000'; ectx.fillRect(0,0,512,512);
+        FACADE_DRAW[style](c.getContext('2d'), ectx, base);
+        var mat = new THREE.MeshStandardMaterial({
+          map: finishTex(c, 1/CELLS, 1/CELLS), emissiveMap: finishTex(e, 1/CELLS, 1/CELLS),
+          emissive: 0xffffff, emissiveIntensity: { brick: 0.95, plaster: 0.95, office: 0.7, glass: 0.6 }[style],
+          roughness: style === 'glass' ? 0.3 : 0.88, metalness: style === 'glass' ? 0.25 : 0,
+          vertexColors: style === 'plaster'
+        });
+        return { batch: new GeoBatch(), mat: mat };
+      });
     });
-    var roofMat = new THREE.MeshStandardMaterial({ color: 0x201c18, roughness: 0.9 });
-    var baseMat = new THREE.MeshStandardMaterial({ color: 0x120f0c, roughness: 1 });
-    var mats = [sideMat, sideMat, roofMat, baseMat, sideMat, sideMat];
-    buildingMatCache[baseColorHex] = mats;
-    return mats;
+    // ground-floor shopfronts: a 4-bay strip with one door
+    ['#2b2f36','#4a3a2c','#e7e2d6'].forEach(function(frame){
+      var c = makeCanvas(512, 160), e = makeCanvas(512, 160);
+      var ctx = c.getContext('2d'), ectx = e.getContext('2d');
+      ectx.fillStyle = '#000'; ectx.fillRect(0,0,512,160);
+      ctx.fillStyle = frame; ctx.fillRect(0,0,512,160);
+      ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(0, 0, 512, 26);          // fascia
+      var door = randInt(0,3);
+      for (var b=0;b<4;b++){
+        var x = b*128;
+        if (b === door){
+          glassGrad(ctx, x+40, 40, 48, 118, '#3b4552', '#12161c');
+          ectx.fillStyle = '#ffd9a0'; ectx.globalAlpha = 0.6; ectx.fillRect(x+40, 40, 48, 118); ectx.globalAlpha = 1;
+        } else {
+          glassGrad(ctx, x+10, 36, 108, 100, '#3d4756', '#11151b');
+          ctx.fillStyle = frame; ctx.fillRect(x+62, 36, 4, 100);
+          var g = ectx.createLinearGradient(0, 36, 0, 136);
+          g.addColorStop(0, 'rgba(255,214,150,0.95)'); g.addColorStop(1, 'rgba(255,190,110,0.55)');
+          ectx.fillStyle = g; ectx.fillRect(x+10, 36, 108, 100);
+          ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fillRect(x+10, 136, 108, 24);     // kick plate
+        }
+      }
+      BLD.shop.push({ batch: new GeoBatch(), mat: new THREE.MeshStandardMaterial({
+        map: finishTex(c, 1/4, 1), emissiveMap: finishTex(e, 1/4, 1), emissive: 0xffffff, emissiveIntensity: 0.9, roughness: 0.6 }) });
+    });
+    BLD.tankGeo = new THREE.CylinderGeometry(1.1, 1.1, 1.8, 12);
+    BLD.tankCap = new THREE.ConeGeometry(1.2, 0.6, 12);
+    BLD.tankMat = new THREE.MeshStandardMaterial({ color: 0x6b5340, roughness: 0.95 });
+    return BLD;
   }
 
-  var DEFAULT_PALETTE = ['#b5654a','#d9b27c','#6f7f6a','#5a6b8c','#8a5a6b','#c9a15a','#4f5d4a','#9c7a52'];
+  // Axis box rotated about Y, appended to batches. uv(h, v) maps a
+  // side face (h wide, v tall) to [u0,v0,u1,v1]; col tints vertices.
+  function addBox(sideB, topB, cx, cy, cz, sx, sy, sz, rot, uv, col, topCol){
+    var hx = sx/2, hy = sy/2, hz = sz/2, cs = Math.cos(rot), sn = Math.sin(rot);
+    function P(x, y, z){ return [cx + x*cs + z*sn, cy + y, cz - x*sn + z*cs]; }
+    function N(x, z){ return [x*cs + z*sn, 0, -x*sn + z*cs]; }
+    var faces = [
+      [[ hx,-hy, hz],[ hx,-hy,-hz],[ hx,hy,-hz],[ hx,hy, hz], N(1,0),  sz],
+      [[-hx,-hy,-hz],[-hx,-hy, hz],[-hx,hy, hz],[-hx,hy,-hz], N(-1,0), sz],
+      [[-hx,-hy, hz],[ hx,-hy, hz],[ hx,hy, hz],[-hx,hy, hz], N(0,1),  sx],
+      [[ hx,-hy,-hz],[-hx,-hy,-hz],[-hx,hy,-hz],[ hx,hy,-hz], N(0,-1), sx]
+    ];
+    if (sideB) faces.forEach(function(f){
+      sideB.quad(P.apply(null,f[0]), P.apply(null,f[1]), P.apply(null,f[2]), P.apply(null,f[3]), f[4], uv ? uv(f[5], sy) : [0,0,1,1], col);
+    });
+    if (topB) topB.quad(P(-hx,hy,-hz), P(hx,hy,-hz), P(hx,hy,hz), P(-hx,hy,hz), [0,1,0], [0,0,sx/4,sz/4], topCol || col);
+  }
+
+  // A building set back behind the sidewalk, aligned with the street.
+  // All four footprint corners must clear every road's sidewalk, so
+  // nothing ends up on a road, in a junction, or inside a curve.
+  function placeBuildingAt(pt, tangent, normal, o){
+    var K = buildingKit();
+    var weights = o.styles || { brick: 1 }, total = 0, key;
+    for (key in weights) total += weights[key];
+    var roll = Math.random()*total, style = 'brick';
+    for (key in weights){ roll -= weights[key]; if (roll <= 0){ style = key; break; } }
+    var S = STYLES[style];
+
+    var floors = randInt(S.floors[0], S.floors[1]);
+    var hasShop = Math.random() < S.shop;
+    var groundH = hasShop ? GROUND : 0;
+    var upperH = floors * FLOOR, h = groundH + upperH;
+
+    // try the chosen footprint, then smaller ones, before giving up
+    var alongBays = randInt(S.along[0], S.along[1]), acrossBays = randInt(S.across[0], S.across[1]);
+    var along, across, cx, cz, r, fits = false, clear = SIDEWALK_OUTER + 0.5;
+    for (var attempt = 0; attempt < 3 && !fits; attempt++){
+      along = alongBays * BAY; across = acrossBays * BAY;
+      var off = SIDEWALK_OUTER + 0.9 + across/2;
+      cx = pt.x + normal.x*off; cz = pt.z + normal.z*off;
+      r = 0.5 * Math.sqrt(along*along + across*across);
+      fits = footprintFree(cx, cz, r*0.8);
+      for (var a=-1; a<=1 && fits; a+=2) for (var b=-1; b<=1 && fits; b+=2){
+        var x = cx + tangent.x*along/2*a + normal.x*across/2*b;
+        var z = cz + tangent.z*along/2*a + normal.z*across/2*b;
+        if (distToRoads(x, z, null) < clear) fits = false;
+      }
+      if (alongBays > 2) alongBays--; else if (acrossBays > 2) acrossBays--; else break;
+    }
+    if (!fits) return;
+    placedFootprints.push({ x: cx, z: cz, r: r*0.8 });
+
+    var rot = Math.atan2(tangent.x, tangent.z);
+    // which local ±x side faces the street
+    var roadSide = (-normal.x*Math.cos(rot) + normal.z*Math.sin(rot)) > 0 ? 1 : -1;
+    var lx = Math.cos(rot), lz = -Math.sin(rot);   // local +x in world
+
+    var tint = null;
+    if (style === 'plaster'){
+      var c = new THREE.Color(pick(o.palette || ['#c9b79c'])).lerp(new THREE.Color(0xffffff), 0.35);
+      tint = [c.r, c.g, c.b];
+    }
+    var fac = pick(K.facade[style]);
+    var ou = randInt(0, CELLS-1), ov = randInt(0, CELLS-1);
+    var facadeUV = function(hLen, vLen){ return [ou, ov, ou + hLen/BAY, ov + vLen/FLOOR]; };
+
+    // upper floors (+ roof)
+    addBox(fac.batch, K.roof, cx, groundH + upperH/2, cz, across, upperH, along, rot, facadeUV, tint, [0.21,0.2,0.19]);
+    // ground floor: shopfront / lobby
+    if (hasShop){
+      var shop = pick(K.shop), su = randInt(0,3);
+      addBox(shop.batch, null, cx, groundH/2, cz, across, groundH, along, rot,
+        function(hLen){ return [su, 0, su + hLen/BAY, 1]; });
+      // string course between shop and upper floors
+      addBox(K.trim, K.trim, cx, groundH + 0.12, cz, across + 0.24, 0.24, along + 0.24, rot, null, [0.72,0.69,0.63]);
+    }
+    // cornice + parapet
+    var trimCol = style === 'glass' ? [0.22,0.26,0.3] : style === 'office' ? [0.6,0.6,0.58] : [0.74,0.7,0.62];
+    addBox(K.trim, K.trim, cx, h - 0.35, cz, across + 0.36, 0.3, along + 0.36, rot, null, trimCol);
+    var pT = 0.25, pH = 0.7;
+    [[ (across-pT)/2, 0, pT, along], [-(across-pT)/2, 0, pT, along], [0, (along-pT)/2, across, pT], [0, -(along-pT)/2, across, pT]].forEach(function(p){
+      addBox(K.trim, K.trim, cx + lx*p[0] + tangent.x*p[1], h + pH/2, cz + lz*p[0] + tangent.z*p[1], p[2], pH, p[3], rot, null, trimCol);
+    });
+
+    // rooftop clutter
+    function roofSpot(m){
+      var u = (Math.random()-0.5)*(across - m*2), w = (Math.random()-0.5)*(along - m*2);
+      return [cx + lx*u + tangent.x*w, cz + lz*u + tangent.z*w];
+    }
+    var nAC = randInt(1, 3);
+    for (var i=0;i<nAC;i++){
+      var sp = roofSpot(1.5);
+      addBox(K.props, K.props, sp[0], h + 0.45, sp[1], 1.3, 0.9, 1.0, rot, null, [0.55,0.57,0.6]);
+    }
+    if (floors >= 5){
+      var sp2 = roofSpot(2.2);
+      addBox(K.trim, K.trim, sp2[0], h + 1.2, sp2[1], 2.6, 2.4, 2.6, rot, null, trimCol);
+    }
+    if (style === 'brick' && Math.random() < 0.35){
+      var sp3 = roofSpot(2), tank = new THREE.Mesh(K.tankGeo, K.tankMat), cap = new THREE.Mesh(K.tankCap, K.tankMat);
+      tank.position.set(sp3[0], h + 1.6, sp3[1]); cap.position.set(sp3[0], h + 2.8, sp3[1]);
+      tank.castShadow = true;
+      scene.add(tank); scene.add(cap);
+      addBox(K.props, K.props, sp3[0], h + 0.35, sp3[1], 1.8, 0.7, 1.8, rot, null, [0.25,0.22,0.2]);
+    }
+    // glass towers step back near the top
+    if (style === 'glass' && floors >= 12 && across >= 3*BAY && along >= 3*BAY && Math.random() < 0.7){
+      var extra = randInt(2, 4)*FLOOR;
+      addBox(fac.batch, K.roof, cx, h + extra/2, cz, across - BAY, extra, along - BAY, rot, facadeUV, null, [0.21,0.2,0.19]);
+      addBox(K.trim, K.trim, cx, h + extra + 0.15, cz, across - BAY + 0.3, 0.3, along - BAY + 0.3, rot, null, trimCol);
+    }
+
+    // street-facing awning + lit sign over shops
+    if (hasShop && (style === 'brick' || style === 'plaster')){
+      var awn = new THREE.Color(pick(o.palette || ['#7a2e2e'])).lerp(new THREE.Color(0x000000), 0.1);
+      var ax = cx + lx*roadSide*(across/2 + 0.7), az = cz + lz*roadSide*(across/2 + 0.7);
+      addBox(K.awning, K.awning, ax, groundH - 0.75, az, 1.4, 0.14, along*0.86, rot, null, [awn.r, awn.g, awn.b]);
+      addBox(K.awning, null, cx + lx*roadSide*(across/2 + 1.4), groundH - 1.05, cz + lz*roadSide*(across/2 + 1.4), 0.04, 0.45, along*0.86, rot, null, [awn.r*0.8, awn.g*0.8, awn.b*0.8]);
+    }
+    if (hasShop && Math.random() < 0.7){
+      var sc = new THREE.Color(o.signColor !== undefined ? o.signColor : pick([0xffcf8a, 0xff6b9d, 0x7fd4ff, 0xb6ff8a]));
+      if (Math.random() < 0.4) sc = new THREE.Color(pick([0xffcf8a, 0xffffff, 0x7fd4ff]));
+      var sx = cx + lx*roadSide*(across/2 + 0.06), sz = cz + lz*roadSide*(across/2 + 0.06);
+      addBox(K.sign, null, sx, groundH - 0.32, sz, 0.08, 0.42, Math.min(along*0.5, 5), rot, null, [sc.r, sc.g, sc.b]);
+    }
+  }
+
+  // Turn the collected building batches into meshes (call once).
+  function finishBuildings(){
+    if (!BLD) return;
+    function add(B, mat, shadows){
+      if (!B.idx.length) return;
+      var m = B.mesh(mat);
+      m.castShadow = !!shadows;
+      scene.add(m);
+    }
+    Object.keys(BLD.facade).forEach(function(s){ BLD.facade[s].forEach(function(f){ add(f.batch, f.mat, true); }); });
+    BLD.shop.forEach(function(f){ add(f.batch, f.mat, true); });
+    add(BLD.roof, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 }), false);
+    add(BLD.trim, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 }), true);
+    add(BLD.props, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, metalness: 0.4 }), true);
+    add(BLD.awning, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, side: THREE.DoubleSide }), true);
+    add(BLD.sign, new THREE.MeshBasicMaterial({ vertexColors: true }), false);
+  }
+
   var placedFootprints = [];   // {x, z, r} — buildings, shops, park, …
   function footprintFree(x, z, r){
     for (var i=0;i<placedFootprints.length;i++){
@@ -1366,33 +1662,6 @@
       if (dx*dx + dz*dz < (f.r + r)*(f.r + r)) return false;
     }
     return true;
-  }
-
-  // A building set back behind the sidewalk, aligned with the street.
-  // All four footprint corners must clear every road's sidewalk, so
-  // nothing ends up on a road, in a junction, or inside a curve.
-  function placeBuildingAt(pt, tangent, normal, palette){
-    var pal = palette || DEFAULT_PALETTE;
-    var along = 5 + Math.random()*3.5, across = 4.5 + Math.random()*2.5, h = 5 + Math.random()*9;
-    var off = SIDEWALK_OUTER + 0.9 + across/2;
-    var cx = pt.x + normal.x*off, cz = pt.z + normal.z*off;
-    var r = 0.5 * Math.sqrt(along*along + across*across);
-    if (!footprintFree(cx, cz, r*0.8)) return;
-    var clear = SIDEWALK_OUTER + 0.5;
-    for (var a=-1; a<=1; a+=2){
-      for (var b=-1; b<=1; b+=2){
-        var x = cx + tangent.x*along/2*a + normal.x*across/2*b;
-        var z = cz + tangent.z*along/2*a + normal.z*across/2*b;
-        if (distToRoads(x, z, null) < clear) return;
-      }
-    }
-    var color = pal[Math.floor(Math.random()*pal.length)];
-    var mesh = new THREE.Mesh(new THREE.BoxGeometry(across, h, along), makeBuildingMaterials(color));
-    mesh.position.set(cx, h/2, cz);
-    mesh.rotation.y = Math.atan2(tangent.x, tangent.z);
-    mesh.castShadow = true; mesh.receiveShadow = true;
-    scene.add(mesh);
-    placedFootprints.push({ x: cx, z: cz, r: r*0.8 });
   }
 
   // ---------------------------------------------------------------
@@ -1477,7 +1746,7 @@
         [1, -1].forEach(function(side){
           var n = f.normal.clone().multiplyScalar(side);
           if (o.exclude && o.exclude(f.point, n)) return;
-          placeBuildingAt(f.point, f.tangent, n, o.palette);
+          placeBuildingAt(f.point, f.tangent, n, o);
         });
       }
     }
@@ -1769,7 +2038,8 @@
       return pts;
     }
 
-    var HUB_PALETTE = ['#5a5850','#6f6c60','#4a4740','#807c6e'];
+    // plaster tints and awning colours around the square
+    var HUB_PALETTE = ['#c9b79c','#a7b8a3','#c99d8c','#9fb3c4','#d4c08a','#8c5a4a'];
     CITY_DEFS = [
       { key:"skills",     dir: new THREE.Vector3(0,0,-1), color: 0xffb84d,
         palette: ['#a3652f','#c98a45','#8a5225','#d9a05c','#6b3d18','#b87a3a'] },
@@ -1865,13 +2135,17 @@
     });
 
     // ---- Buildings, street lights and street trees ----
-    populateRoad(hubRoad, { buildStep: 7, lampStep: 13, palette: HUB_PALETTE, lampColor: 0xffcf8a });
+    var HUB_STYLES = { plaster: 3, brick: 3, office: 1 };
+    populateRoad(hubRoad, { buildStep: 6, lampStep: 13, palette: HUB_PALETTE, styles: HUB_STYLES, lampColor: 0xffcf8a });
     spokeRoads.forEach(function(r){
-      populateRoad(r, { buildStep: 9, lampStep: 16, treeStep: 16, palette: HUB_PALETTE, lampColor: 0xffcf8a });
+      populateRoad(r, { buildStep: 9, lampStep: 16, treeStep: 16, palette: HUB_PALETTE, styles: { brick: 3, plaster: 2 }, lampColor: 0xffcf8a });
     });
     CITY_DEFS.forEach(function(cd){
-      populateRoad(cd.avenue, { buildStep: 8, lampStep: 14, treeStep: 14, palette: cd.palette, lampColor: cd.color });
-      populateRoad(cd.road,   { buildStep: 8, lampStep: 16, palette: cd.palette, lampColor: cd.color });
+      // downtown avenue: offices and glass towers; ring road: mixed
+      populateRoad(cd.avenue, { buildStep: 8, lampStep: 14, treeStep: 14, palette: cd.palette, signColor: cd.color,
+                                styles: { glass: 3, office: 3, brick: 1 }, lampColor: cd.color });
+      populateRoad(cd.road,   { buildStep: 8, lampStep: 16, palette: cd.palette, signColor: cd.color,
+                                styles: { brick: 3, office: 2, plaster: 2, glass: 1 }, lampColor: cd.color });
 
       // faint tinted ground so each city reads as its own place
       var tint = new THREE.Mesh(
@@ -1884,6 +2158,8 @@
       tint.receiveShadow = true;
       scene.add(tint);
     });
+
+    finishBuildings();
 
     // ---- Park trees + fountain ----
     var treesPlaced = 0, attempts = 0;
