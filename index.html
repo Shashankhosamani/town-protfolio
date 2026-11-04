@@ -686,7 +686,6 @@
   // 3D model credits — several of these are CC-BY, which REQUIRES
   // visible attribution wherever the work is shared.
   var CREDITS = [
-    { title:'Road Modular', author:'mortalityrexotable', url:'https://sketchfab.com/3d-models/road-modular-74f74f8569ac410f80266d3f1603bffd', license:'CC BY 4.0' },
     { title:'Dodge Challenger – Muscle Car – Low-Poly', author:'Allay Design', url:'https://sketchfab.com/3d-models/dodge-challenger-muscle-car-low-poly-4c741c8d40c34ebe8b999e5a2823d80f', license:'Sketchfab Standard' },
     { title:'Australian Traffic Light & Pedestrian Light', author:'JoTrain The Aussie', url:'https://sketchfab.com/3d-models/australian-traffic-light-pedestrain-light-72b20af0bca44dfab473cbbd1f0af7a2', license:'Sketchfab Standard' }
   ];
@@ -798,53 +797,8 @@
   // fails to load — e.g. the file was opened as file:// instead of
   // served over http://, which blocks the fetch.
   // ---------------------------------------------------------------
-  var ASSETS = { road: null, car: null, trafficLight: null };
-  var PREFABS = {};
+  var ASSETS = { car: null, trafficLight: null };
   var assetsSettled = false;
-
-  function findByPrefix(root, prefix){
-    var found = null;
-    root.traverse(function(obj){
-      if (!found && obj.name && obj.name.indexOf(prefix) === 0) found = obj;
-    });
-    return found;
-  }
-
-  // Wrap a piece so its own local origin sits at its horizontal
-  // center with its bottom resting on y=0 — makes it drop-in
-  // placeable by position/rotation alone, like the procedural pieces.
-  function makeGroundedPrefab(piece){
-    if (!piece) return null;
-    var raw = piece.clone(true);
-    raw.position.set(0,0,0);
-    raw.quaternion.identity();
-    raw.updateMatrixWorld(true);
-    var box = new THREE.Box3().setFromObject(raw);
-    var size = box.getSize(new THREE.Vector3());
-    var center = box.getCenter(new THREE.Vector3());
-    raw.position.x -= center.x;
-    raw.position.z -= center.z;
-    raw.position.y -= box.min.y;
-    var pivot = new THREE.Group();
-    pivot.add(raw);
-    pivot.userData.size = size;
-    return pivot;
-  }
-
-  function buildPrefabs(){
-    if (ASSETS.road){
-      PREFABS.road = makeGroundedPrefab(findByPrefix(ASSETS.road, 'Road_'));
-      PREFABS.lightPole = makeGroundedPrefab(findByPrefix(ASSETS.road, 'Light pole_'));
-      // a straight road piece may have been authored running along
-      // local X or Z — normalize so "forward" is always +Z.
-      if (PREFABS.road && PREFABS.road.userData.size.x > PREFABS.road.userData.size.z){
-        PREFABS.road.children[0].rotation.y = Math.PI/2;
-        var sz = PREFABS.road.userData.size;
-        PREFABS.road.userData.size = new THREE.Vector3(sz.z, sz.y, sz.x);
-      }
-    }
-    assetsSettled = true;
-  }
 
   function setLoad(frac, msg){
     $('load-bar').firstElementChild.style.width = Math.round(frac*100) + '%';
@@ -862,7 +816,6 @@
       return;
     }
     var jobs = [
-      { key:'road', url: 'road_modular/scene.web.gltf' },
       { key:'car', url: 'dodge_challenger_-_muscle_car_-_low-poly/scene.web.gltf' },
       { key:'trafficLight', url: 'australian_traffic_light__pedestrain_light/scene.web.gltf' }
     ];
@@ -876,7 +829,7 @@
       remaining--;
       report();
       if (remaining <= 0){
-        buildPrefabs();
+        assetsSettled = true;
         setLoad(1, failed ? 'Ready — ' + failed + ' model(s) unavailable, using simple shapes' : 'Ready');
       }
     }
@@ -907,7 +860,7 @@
   scene.background = new THREE.Color(SKY_COLOR);
   scene.fog = new THREE.FogExp2(SKY_COLOR, 0.006);
 
-  var camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 700);
+  var camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.5, 700);
   camera.position.set(0, 8, -20);
 
   try {
@@ -928,7 +881,8 @@
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
 
-  scene.add(new THREE.AmbientLight(0x30405a, 1.0));
+  scene.add(new THREE.AmbientLight(0x30405a, 0.9));
+  scene.add(new THREE.HemisphereLight(0x6d7fa8, 0x1d2016, 0.55));
   var sun = new THREE.DirectionalLight(0xffb37a, 0.55);
   sun.position.set(-60, 40, -28);
   sun.castShadow = true;
@@ -994,17 +948,34 @@
   // World state — built lazily on Start so a slow or failing build
   // can't block the button itself from responding.
   // ---------------------------------------------------------------
-  var roads = [];                    // [{ key, centerPts, normals, closed }]
-  var allPts = [], allNormals = [];  // merged, for boundary collision
-  var stationMeshes = [], car, CITY_DEFS = [], hubPtsRef = null;
-  var ROAD_HALF, CURB_WIDTH, SIDEWALK_WIDTH, STREET_EDGE, SIDEWALK_OUTER, CAR_HALF;
-  var speed = 0, MAX_SPEED, ACCEL, BRAKE, FRICTION, TURN_RATE, BOUND_LIMIT;
+  var roads = [];                    // see makeRoad()
+  var stationMeshes = [], car, CITY_DEFS = [], spawn = null;
   var camOffset, camTarget, forwardVec;
   var mmCanvas, mmCtx, MM_SCALE;
   var promptEl, promptTextEl, nearestStation = null;
   var clock, worldBuilt = false;
   var speedEl = $('speed-val'), locEl = $('location-readout');
 
+  // ---------------------------------------------------------------
+  // Street cross-section (1 unit ≈ 1 metre):
+  //
+  //   grass | sidewalk | curb |   lane   |   lane   | curb | sidewalk | grass
+  //                          -ROAD_HALF  0  +ROAD_HALF
+  // ---------------------------------------------------------------
+  var ROAD_HALF = 5.0, CURB_W = 0.35, CURB_H = 0.16, SIDEWALK_W = 3.0;
+  var STREET_EDGE = ROAD_HALF + CURB_W;
+  var SIDEWALK_OUTER = STREET_EDGE + SIDEWALK_W;
+  var CAR_HALF = 1.15;
+  var BOUND_LIMIT = ROAD_HALF - CAR_HALF + 0.1;   // keep wheels off the curb
+  var speed = 0, MAX_SPEED = 26, ACCEL = 17, BRAKE = 27, FRICTION = 10, TURN_RATE = 2.4;
+
+  var HUB_RADIUS = 26;          // town-square roundabout (centre-line radius)
+  var CITY_DIST = 150;          // town square → city centre
+  var CITY_W = 50, CITY_H = 30, CITY_CORNER = 16;   // city ring road: rounded rectangle
+
+  // ---------------------------------------------------------------
+  // Polyline helpers
+  // ---------------------------------------------------------------
   function computeNormals(pts, closed){
     var out = [];
     for (var i=0;i<pts.length;i++){
@@ -1022,33 +993,6 @@
     return out;
   }
 
-  function buildFlatRibbon(centerPts, normals, closed, innerDist, outerDist, y, colorFn){
-    var positions = [], colors = [];
-    var c = new THREE.Color();
-    var segCount = closed ? centerPts.length : centerPts.length - 1;
-    for (var i=0;i<segCount;i++){
-      var i2 = (i+1) % centerPts.length;
-      var p0 = centerPts[i], p1 = centerPts[i2];
-      var n0 = normals[i], n1 = normals[i2];
-      var aIn = new THREE.Vector3().copy(p0).addScaledVector(n0, innerDist); aIn.y = y;
-      var aOut = new THREE.Vector3().copy(p0).addScaledVector(n0, outerDist); aOut.y = y;
-      var bIn = new THREE.Vector3().copy(p1).addScaledVector(n1, innerDist); bIn.y = y;
-      var bOut = new THREE.Vector3().copy(p1).addScaledVector(n1, outerDist); bOut.y = y;
-      c.set(colorFn(i));
-      [aIn,aOut,bOut, aIn,bOut,bIn].forEach(function(v){
-        positions.push(v.x, v.y, v.z);
-        colors.push(c.r, c.g, c.b);
-      });
-    }
-    var geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-    geo.computeVertexNormals();
-    return geo;
-  }
-
-  // Cumulative arc length along a point path, for evenly spacing
-  // discrete road-kit tiles over a continuous spline.
   function arcLengthTable(pts, closed){
     var cum = [0];
     for (var i=1;i<pts.length;i++) cum.push(cum[i-1] + pts[i].distanceTo(pts[i-1]));
@@ -1063,54 +1007,313 @@
         var segLen = cum[i] - cum[i-1];
         var t = segLen > 1e-6 ? (dist - cum[i-1]) / segLen : 0;
         var a = pts[i-1], b = pts[i % n];
-        var point = a.clone().lerp(b, t);
-        var tangent = b.clone().sub(a).normalize();
-        return { point: point, tangent: tangent };
+        return { point: a.clone().lerp(b, t), tangent: b.clone().sub(a).normalize() };
       }
     }
     var last = pts[n-1], prev = pts[Math.max(0,n-2)];
     return { point: last.clone(), tangent: last.clone().sub(prev).normalize() };
   }
 
-  function tileRoadWithKit(road){
-    var pts = road.centerPts;
-    var cum = arcLengthTable(pts, road.closed);
-    var total = cum[cum.length-1];
-    var pieceLen = PREFABS.road.userData.size.z;
-    var n = Math.max(1, Math.round(total / pieceLen));
-    var step = total / n;
-    var widthFix = (ROAD_HALF*2) / PREFABS.road.userData.size.x;
-    for (var s=0; s<n; s++){
-      var res = sampleAtArcLength(pts, cum, (s+0.5)*step);
-      var tile = PREFABS.road.clone(true);
-      tile.position.copy(res.point);
-      tile.position.y = 0.02;
-      tile.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1), res.tangent);
-      tile.scale.set(widthFix, 1, step/pieceLen);
-      scene.add(tile);
+  // Re-space a polyline so every road has an even ~1 sample per metre.
+  function resample(pts, closed, spacing){
+    var cum = arcLengthTable(pts, closed), total = cum[cum.length-1];
+    var n = Math.max(1, Math.round(total / spacing));
+    var out = [];
+    for (var i=0; i < (closed ? n : n+1); i++) out.push(sampleAtArcLength(pts, cum, Math.min(total, i*total/n)).point);
+    return out;
+  }
+
+  function makeRoad(key, pts, closed){
+    var r = { key:key, centerPts: pts, closed: closed, normals: computeNormals(pts, closed) };
+    r.cum = arcLengthTable(pts, closed);
+    r.length = r.cum[r.cum.length-1];
+    var b = { minX:Infinity, maxX:-Infinity, minZ:Infinity, maxZ:-Infinity };
+    pts.forEach(function(p){
+      if (p.x < b.minX) b.minX = p.x; if (p.x > b.maxX) b.maxX = p.x;
+      if (p.z < b.minZ) b.minZ = p.z; if (p.z > b.maxZ) b.maxZ = p.z;
+    });
+    r.bbox = b;
+    return r;
+  }
+
+  function frameAt(road, s){
+    var f = sampleAtArcLength(road.centerPts, road.cum, s);
+    f.normal = new THREE.Vector3(-f.tangent.z, 0, f.tangent.x);
+    return f;
+  }
+
+  // Distance (xz) from a point to a road's centre-line. Roads further
+  // than ~30m are rejected by bounding box and report Infinity, which
+  // is fine: every caller only cares about nearby roads.
+  // With flatEnds, a point lying beyond either end of an open road is
+  // not "on" it: asphalt stops square at the end instead of being
+  // rounded off, so a curb just past a T-junction stays intact.
+  function closestOnRoad(road, x, z, out, flatEnds){
+    var b = road.bbox, m = 30;
+    if (x < b.minX-m || x > b.maxX+m || z < b.minZ-m || z > b.maxZ+m) return Infinity;
+    var pts = road.centerPts, n = pts.length, segs = road.closed ? n : n-1, best = Infinity;
+    for (var i=0;i<segs;i++){
+      var a = pts[i], c = pts[(i+1)%n];
+      var dx = c.x-a.x, dz = c.z-a.z, len2 = dx*dx + dz*dz;
+      var t = len2 > 0 ? ((x-a.x)*dx + (z-a.z)*dz) / len2 : 0;
+      if (flatEnds && !road.closed && ((i === 0 && t < 0) || (i === segs-1 && t > 1))) continue;
+      t = t < 0 ? 0 : (t > 1 ? 1 : t);
+      var px = a.x + dx*t, pz = a.z + dz*t;
+      var d2 = (x-px)*(x-px) + (z-pz)*(z-pz);
+      if (d2 < best){ best = d2; if (out){ out.x = px; out.z = pz; } }
+    }
+    return Math.sqrt(best);
+  }
+  function distToRoads(x, z, except, flatEnds){
+    var best = Infinity;
+    for (var i=0;i<roads.length;i++){
+      if (roads[i] === except) continue;
+      var d = closestOnRoad(roads[i], x, z, null, flatEnds);
+      if (d < best) best = d;
+    }
+    return best;
+  }
+  function distanceToAnyRoad(pos){ return distToRoads(pos.x, pos.z, null); }
+
+  // Which part of each segment survives on one side of a road: a
+  // point is dropped when any probe offset lands on ANOTHER road's
+  // asphalt. That single rule opens curbs, sidewalks and markings at
+  // every T-junction and crossroads. Where a segment crosses the
+  // boundary the exact cut point is found by bisection, so curbs end
+  // precisely at the other road's edge instead of snapping to the
+  // 1 m sample grid. Returns per segment null (dropped) or [t0, t1].
+  function junctionMask(road, offsets, pad){
+    var pts = road.centerPts, nrm = road.normals, n = pts.length, segs = road.closed ? n : n-1;
+    var limit = ROAD_HALF + pad;
+    function okAt(i, t){
+      var j = (i+1) % n;
+      var px = pts[i].x + (pts[j].x - pts[i].x)*t, pz = pts[i].z + (pts[j].z - pts[i].z)*t;
+      var nx = nrm[i].x + (nrm[j].x - nrm[i].x)*t, nz = nrm[i].z + (nrm[j].z - nrm[i].z)*t;
+      for (var k=0;k<offsets.length;k++){
+        if (distToRoads(px + nx*offsets[k], pz + nz*offsets[k], road, true) < limit) return false;
+      }
+      return true;
+    }
+    var ok = [];
+    for (var i=0;i<n;i++) ok.push(i < segs ? okAt(i, 0) : okAt(segs-1, 1));   // last point of an open road
+    var out = [];
+    for (var s=0;s<segs;s++){
+      var a = ok[s], b = ok[(s+1)%n];
+      if (a && b){ out.push([0,1]); continue; }
+      if (!a && !b){ out.push(null); continue; }
+      var lo = 0, hi = 1;                       // bisect for the boundary
+      for (var it=0; it<12; it++){
+        var mid = (lo+hi)/2;
+        if (okAt(s, mid) === a) lo = mid; else hi = mid;
+      }
+      out.push(a ? [0, lo] : [hi, 1]);
+    }
+    return out;
+  }
+
+  // ---------------------------------------------------------------
+  // Batched geometry: every road piece of one material goes into a
+  // single mesh, so the whole network is a handful of draw calls.
+  // ---------------------------------------------------------------
+  function GeoBatch(){ this.pos = []; this.nrm = []; this.uv = []; this.idx = []; }
+  GeoBatch.prototype.quad = function(a, b, c, d, n, uvScale){
+    var v = this.pos.length / 3, self = this;
+    [a,b,c,d].forEach(function(p, k){
+      self.pos.push(p[0], p[1], p[2]);
+      self.nrm.push(n[0], n[1], n[2]);
+      if (uvScale) self.uv.push(p[0]/uvScale, p[2]/uvScale);
+      else self.uv.push(k===1||k===2 ? 1 : 0, k>=2 ? 1 : 0);
+    });
+    // wind so the face's geometric normal agrees with n (front-facing)
+    var ux = b[0]-a[0], uy = b[1]-a[1], uz = b[2]-a[2], wx = c[0]-a[0], wy = c[1]-a[1], wz = c[2]-a[2];
+    var fx = uy*wz - uz*wy, fy = uz*wx - ux*wz, fz = ux*wy - uy*wx;
+    if (fx*n[0] + fy*n[1] + fz*n[2] >= 0) this.idx.push(v, v+1, v+2, v, v+2, v+3);
+    else this.idx.push(v, v+2, v+1, v, v+3, v+2);
+  };
+  GeoBatch.prototype.mesh = function(mat){
+    var g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(this.nrm, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(this.uv, 2));
+    g.setIndex(this.idx);
+    var m = new THREE.Mesh(g, mat);
+    m.receiveShadow = true;
+    return m;
+  };
+
+  // point at fraction t along segment i, pushed d sideways
+  function offsetPt(road, i, t, d){
+    var n = road.centerPts.length, j = (i+1) % n;
+    var p = road.centerPts[i], q = road.centerPts[j], a = road.normals[i], b = road.normals[j];
+    var nx = a.x + (b.x-a.x)*t, nz = a.z + (b.z-a.z)*t;
+    return [p.x + (q.x-p.x)*t + nx*d, p.z + (q.z-p.z)*t + nz*d];
+  }
+  // flat strip between lateral offsets d0..d1 at height y
+  function addStrip(B, road, d0, d1, y, keep, uvScale){
+    var n = road.centerPts.length, segs = road.closed ? n : n-1;
+    for (var i=0;i<segs;i++){
+      var k = keep ? keep[i] : [0,1];
+      if (!k) continue;
+      var a = offsetPt(road, i, k[0], d0), b = offsetPt(road, i, k[0], d1), c = offsetPt(road, i, k[1], d1), d = offsetPt(road, i, k[1], d0);
+      B.quad([a[0],y,a[1]], [b[0],y,b[1]], [c[0],y,c[1]], [d[0],y,d[1]], [0,1,0], uvScale);
     }
   }
-
-  function buildRoadSurfaceProcedural(road){
-    var roadGeo = buildFlatRibbon(road.centerPts, road.normals, road.closed, -ROAD_HALF, ROAD_HALF, 0.02, function(){ return '#26262b'; });
-    scene.add(new THREE.Mesh(roadGeo, new THREE.MeshStandardMaterial({ vertexColors:true, roughness:0.95 })));
-    var dashGeo = buildFlatRibbon(road.centerPts, road.normals, road.closed, -0.1, 0.1, 0.03, function(i){ return (Math.floor(i/6)%2===0) ? '#e9e6de' : '#26262b'; });
-    scene.add(new THREE.Mesh(dashGeo, new THREE.MeshBasicMaterial({ vertexColors:true })));
+  // vertical face at lateral offset d, facing ±normal
+  function addWall(B, road, d, y0, y1, keep, facing){
+    var n = road.centerPts.length, segs = road.closed ? n : n-1;
+    for (var i=0;i<segs;i++){
+      var k = keep ? keep[i] : [0,1];
+      if (!k) continue;
+      var nr = road.normals[i];
+      var a = offsetPt(road, i, k[0], d), c = offsetPt(road, i, k[1], d);
+      B.quad([a[0],y0,a[1]], [a[0],y1,a[1]], [c[0],y1,c[1]], [c[0],y0,c[1]], [nr.x*facing, 0, nr.z*facing]);
+    }
+  }
+  // a road-aligned rectangle painted on the asphalt (dash, stripe…)
+  function addPaint(B, road, s0, s1, l0, l1, y){
+    var f0 = frameAt(road, Math.max(0, s0)), f1 = frameAt(road, Math.min(road.length, s1));
+    var p = function(f, l){ return [f.point.x + f.normal.x*l, y, f.point.z + f.normal.z*l]; };
+    B.quad(p(f0,l0), p(f0,l1), p(f1,l1), p(f1,l0), [0,1,0]);
   }
 
-  function buildRoadSurface(road){
-    if (PREFABS.road) tileRoadWithKit(road);
-    else buildRoadSurfaceProcedural(road);
-
-    var curbMat = new THREE.MeshStandardMaterial({ vertexColors:true, roughness:0.8 });
-    scene.add(new THREE.Mesh(buildFlatRibbon(road.centerPts, road.normals, road.closed, ROAD_HALF, STREET_EDGE, 0.035, function(){ return '#c9c4b6'; }), curbMat));
-    scene.add(new THREE.Mesh(buildFlatRibbon(road.centerPts, road.normals, road.closed, -STREET_EDGE, -ROAD_HALF, 0.035, function(){ return '#c9c4b6'; }), curbMat));
-
-    var walkMat = new THREE.MeshStandardMaterial({ vertexColors:true, roughness:0.95 });
-    scene.add(new THREE.Mesh(buildFlatRibbon(road.centerPts, road.normals, road.closed, STREET_EDGE, SIDEWALK_OUTER, 0.03, function(){ return '#8b8879'; }), walkMat));
-    scene.add(new THREE.Mesh(buildFlatRibbon(road.centerPts, road.normals, road.closed, -SIDEWALK_OUTER, -STREET_EDGE, 0.03, function(){ return '#8b8879'; }), walkMat));
+  // ---------------------------------------------------------------
+  // Procedural surface textures (canvas → texture, world-space UVs so
+  // overlapping pieces at junctions line up seamlessly)
+  // ---------------------------------------------------------------
+  function canvasTex(size, draw){
+    var c = document.createElement('canvas');
+    c.width = c.height = size;
+    draw(c.getContext('2d'), size);
+    var t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+    return t;
+  }
+  function speckle(ctx, size, count, alphaMax, light){
+    for (var i=0;i<count;i++){
+      var a = Math.random()*alphaMax;
+      ctx.fillStyle = light ? 'rgba(255,255,255,' + a + ')' : 'rgba(0,0,0,' + a + ')';
+      var s = 1 + Math.random()*2;
+      ctx.fillRect(Math.random()*size, Math.random()*size, s, s);
+    }
+  }
+  var ROAD_TEX = null;
+  function roadTextures(){
+    if (ROAD_TEX) return ROAD_TEX;
+    ROAD_TEX = {
+      asphalt: canvasTex(256, function(ctx, s){
+        ctx.fillStyle = '#2b2b30'; ctx.fillRect(0,0,s,s);
+        speckle(ctx, s, 5000, 0.07, true);
+        speckle(ctx, s, 3000, 0.25, false);
+        for (var k=0;k<5;k++){   // faint patch repairs
+          ctx.fillStyle = 'rgba(0,0,0,0.08)';
+          ctx.fillRect(Math.random()*s, Math.random()*s, 20 + Math.random()*50, 14 + Math.random()*30);
+        }
+      }),
+      sidewalk: canvasTex(256, function(ctx, s){
+        ctx.fillStyle = '#7d796e'; ctx.fillRect(0,0,s,s);
+        speckle(ctx, s, 2500, 0.06, true);
+        speckle(ctx, s, 1500, 0.12, false);
+        ctx.strokeStyle = 'rgba(40,38,34,0.55)'; ctx.lineWidth = 2;
+        for (var g=0; g<=s; g += s/4){
+          ctx.beginPath(); ctx.moveTo(g,0); ctx.lineTo(g,s); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(0,g); ctx.lineTo(s,g); ctx.stroke();
+        }
+      }),
+      glow: (function(){
+        var c = document.createElement('canvas'); c.width = c.height = 128;
+        var ctx = c.getContext('2d');
+        var gr = ctx.createRadialGradient(64,64,0, 64,64,64);
+        gr.addColorStop(0, 'rgba(255,255,255,0.9)');
+        gr.addColorStop(0.35, 'rgba(255,255,255,0.35)');
+        gr.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = gr; ctx.fillRect(0,0,128,128);
+        return new THREE.CanvasTexture(c);
+      })()
+    };
+    return ROAD_TEX;
   }
 
+  // ---------------------------------------------------------------
+  // Build the whole street network: asphalt, curbs, sidewalks, lane
+  // markings, crosswalks + stop lines at every junction.
+  // ---------------------------------------------------------------
+  function buildStreetNetwork(){
+    var T = roadTextures();
+    var asphalt = new GeoBatch(), curbTop = new GeoBatch(), walk = new GeoBatch(),
+        wall = new GeoBatch(), paint = new GeoBatch();
+    var PAINT_Y = 0.075;
+
+    roads.forEach(function(road, ri){
+      // asphalt: full width, never cut — overlaps at junctions share
+      // world-space UVs, and a per-road height step avoids z-fighting
+      addStrip(asphalt, road, -ROAD_HALF, ROAD_HALF, 0.02 + ri*0.002, null, 9);
+
+      [1, -1].forEach(function(side){
+        var keepEdge = junctionMask(road, [side*ROAD_HALF, side*SIDEWALK_OUTER], 0.02);
+        var a = side*ROAD_HALF, b = side*STREET_EDGE, c = side*SIDEWALK_OUTER;
+        // curb sits a hair above every sidewalk layer so corners read as one L
+        addStrip(curbTop, road, Math.min(a,b), Math.max(a,b), CURB_H + 0.012, keepEdge);
+        addWall(wall, road, a, 0, CURB_H + 0.012, keepEdge, -side);
+        addStrip(walk, road, Math.min(b,c), Math.max(b,c), CURB_H + ri*0.0006, keepEdge, 6);
+        addWall(wall, road, c, 0, CURB_H, keepEdge, side);
+
+        // solid edge line, stopping at junction mouths
+        var keepLine = junctionMask(road, [side*(ROAD_HALF-0.4)], 0.35);
+        var l0 = side*(ROAD_HALF-0.48), l1 = side*(ROAD_HALF-0.33);
+        addStrip(paint, road, Math.min(l0,l1), Math.max(l0,l1), PAINT_Y, keepLine);
+      });
+
+      // dashed centre line (skipped inside junction boxes)
+      var DASH = 2.4, GAP = 3.2;
+      for (var s = 0.5; s + DASH < road.length; s += DASH + GAP){
+        var m0 = frameAt(road, s).point, m1 = frameAt(road, s + DASH).point;
+        if (distToRoads(m0.x, m0.z, road) < ROAD_HALF + 1.2 || distToRoads(m1.x, m1.z, road) < ROAD_HALF + 1.2) continue;
+        addPaint(paint, road, s, s + DASH, -0.08, 0.08, PAINT_Y);
+      }
+
+      // crosswalk + stop line at each end of an open road
+      if (!road.closed){
+        [0, 1].forEach(function(atEnd){
+          // walk inward from the end until we leave the other road's asphalt
+          var edge = null;
+          for (var d = 0; d < 30; d += 0.25){
+            var s = atEnd ? road.length - d : d;
+            var p = frameAt(road, s).point;
+            if (distToRoads(p.x, p.z, road) > ROAD_HALF + 0.05){ edge = d; break; }
+          }
+          if (edge === null) return;
+          var dir = atEnd ? -1 : 1;             // pointing into this road
+          var at = function(d){ return atEnd ? road.length - d : d; };
+          var z0 = edge + CURB_W + 0.4, z1 = z0 + 2.6;
+          for (var l = -ROAD_HALF + 0.7; l < ROAD_HALF - 0.5; l += 1.0){
+            addPaint(paint, road, Math.min(at(z0), at(z1)), Math.max(at(z0), at(z1)), l, l + 0.5, PAINT_Y);
+          }
+          // stop line across the lane heading INTO the junction
+          // (traffic drives on the right; +normal is the right-hand side
+          // when travelling toward increasing arc length)
+          var sl0 = z1 + 0.9, sl1 = sl0 + 0.45;
+          var laneSide = atEnd ? 1 : -1;
+          var la = laneSide * 0.25, lb = laneSide * (ROAD_HALF - 0.5);
+          addPaint(paint, road, Math.min(at(sl0), at(sl1)), Math.max(at(sl0), at(sl1)), Math.min(la,lb), Math.max(la,lb), PAINT_Y);
+          road['edge' + atEnd] = edge;
+        });
+      }
+    });
+
+    var DS = THREE.FrontSide;
+    scene.add(asphalt.mesh(new THREE.MeshStandardMaterial({ map: T.asphalt, roughness: 0.92, metalness: 0, side: DS })));
+    scene.add(curbTop.mesh(new THREE.MeshStandardMaterial({ color: 0xbdb8aa, roughness: 0.85, side: DS })));
+    scene.add(walk.mesh(new THREE.MeshStandardMaterial({ map: T.sidewalk, roughness: 0.95, side: DS })));
+    scene.add(wall.mesh(new THREE.MeshStandardMaterial({ color: 0x8f8a7e, roughness: 0.9, side: DS })));
+    var paintMesh = paint.mesh(new THREE.MeshBasicMaterial({ color: 0xd9d5c9, side: DS }));
+    paintMesh.material.color.multiplyScalar(0.62);   // painted, not glowing
+    scene.add(paintMesh);
+  }
+
+  // ---------------------------------------------------------------
+  // Buildings
+  // ---------------------------------------------------------------
   var buildingTexCache = {};
   function getBuildingTextures(baseColorHex){
     if (buildingTexCache[baseColorHex]) return buildingTexCache[baseColorHex];
@@ -1155,77 +1358,150 @@
   }
 
   var DEFAULT_PALETTE = ['#b5654a','#d9b27c','#6f7f6a','#5a6b8c','#8a5a6b','#c9a15a','#4f5d4a','#9c7a52'];
+  var placedFootprints = [];   // {x, z, r} — buildings, shops, park, …
+  function footprintFree(x, z, r){
+    for (var i=0;i<placedFootprints.length;i++){
+      var f = placedFootprints[i];
+      var dx = f.x - x, dz = f.z - z;
+      if (dx*dx + dz*dz < (f.r + r)*(f.r + r)) return false;
+    }
+    return true;
+  }
 
-  function placeBuildingAt(pt, n, tangentAngle, palette){
+  // A building set back behind the sidewalk, aligned with the street.
+  // All four footprint corners must clear every road's sidewalk, so
+  // nothing ends up on a road, in a junction, or inside a curve.
+  function placeBuildingAt(pt, tangent, normal, palette){
     var pal = palette || DEFAULT_PALETTE;
-    var d = 4 + Math.random()*2.4;
-    var offset = SIDEWALK_OUTER + d/2 + 1.2;
-    var pos = pt.clone().addScaledVector(n, offset);
-    // don't place a building on or inside another road's footprint
-    if (distanceToAnyRoad(pos) < SIDEWALK_OUTER + 1.5) return;
-    var w = 4 + Math.random()*3.4, h = 5 + Math.random()*8;
+    var along = 5 + Math.random()*3.5, across = 4.5 + Math.random()*2.5, h = 5 + Math.random()*9;
+    var off = SIDEWALK_OUTER + 0.9 + across/2;
+    var cx = pt.x + normal.x*off, cz = pt.z + normal.z*off;
+    var r = 0.5 * Math.sqrt(along*along + across*across);
+    if (!footprintFree(cx, cz, r*0.8)) return;
+    var clear = SIDEWALK_OUTER + 0.5;
+    for (var a=-1; a<=1; a+=2){
+      for (var b=-1; b<=1; b+=2){
+        var x = cx + tangent.x*along/2*a + normal.x*across/2*b;
+        var z = cz + tangent.z*along/2*a + normal.z*across/2*b;
+        if (distToRoads(x, z, null) < clear) return;
+      }
+    }
     var color = pal[Math.floor(Math.random()*pal.length)];
-    var mesh = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), makeBuildingMaterials(color));
-    mesh.position.set(pos.x, h/2, pos.z);
-    mesh.rotation.y = tangentAngle;
+    var mesh = new THREE.Mesh(new THREE.BoxGeometry(across, h, along), makeBuildingMaterials(color));
+    mesh.position.set(cx, h/2, cz);
+    mesh.rotation.y = Math.atan2(tangent.x, tangent.z);
     mesh.castShadow = true; mesh.receiveShadow = true;
     scene.add(mesh);
+    placedFootprints.push({ x: cx, z: cz, r: r*0.8 });
   }
 
-  function placeStreetlightAt(pt, n, lightColor){
-    var color = lightColor !== undefined ? lightColor : 0xffcf8a;
-    var offset = STREET_EDGE + 0.5;
-    var pos = pt.clone().addScaledVector(n, offset);
-    var lampY;
-    if (PREFABS.lightPole){
-      var pole = PREFABS.lightPole.clone(true);
-      var targetHeight = 3.6;
-      var scaleFactor = targetHeight / PREFABS.lightPole.userData.size.y;
-      pole.scale.setScalar(scaleFactor);
-      pole.position.set(pos.x, 0, pos.z);
-      pole.rotation.y = Math.atan2(n.x, n.z) + Math.PI;
-      pole.castShadow = true;
-      scene.add(pole);
-      lampY = targetHeight * 0.92;
-    } else {
-      var poleMesh = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.08,0.08,3.2,6),
-        new THREE.MeshStandardMaterial({ color:0x2a2a2e, roughness:0.6 })
-      );
-      poleMesh.position.set(pos.x, 1.6, pos.z);
-      poleMesh.castShadow = true;
-      scene.add(poleMesh);
-      lampY = 3.25;
-    }
-    var lamp = new THREE.Mesh(new THREE.SphereGeometry(0.18,8,8), new THREE.MeshBasicMaterial({ color: color }));
-    lamp.position.set(pos.x, lampY, pos.z);
-    scene.add(lamp);
-    var light = new THREE.PointLight(color, 0.8, 13);
-    light.position.copy(lamp.position);
-    scene.add(light);
+  // ---------------------------------------------------------------
+  // Street lights: procedural pole + arm + lamp head, with a soft
+  // additive light pool on the road instead of a real PointLight
+  // (dozens of real lights would make the shaders crawl).
+  // ---------------------------------------------------------------
+  var LAMP = null, lampMatCache = {};
+  function lampKit(){
+    if (LAMP) return LAMP;
+    LAMP = {
+      pole: new THREE.CylinderGeometry(0.07, 0.1, 5, 8),
+      base: new THREE.CylinderGeometry(0.16, 0.18, 0.4, 8),
+      arm: new THREE.BoxGeometry(0.07, 0.07, 1.5),
+      head: new THREE.BoxGeometry(0.32, 0.12, 0.62),
+      bulb: new THREE.PlaneGeometry(0.26, 0.5),
+      pool: new THREE.CircleGeometry(4.2, 24),
+      metal: new THREE.MeshStandardMaterial({ color: 0x2c2f36, roughness: 0.45, metalness: 0.7 })
+    };
+    return LAMP;
+  }
+  function lampMats(color){
+    if (lampMatCache[color]) return lampMatCache[color];
+    lampMatCache[color] = {
+      bulb: new THREE.MeshBasicMaterial({ color: color, side: THREE.DoubleSide }),
+      pool: new THREE.MeshBasicMaterial({
+        map: roadTextures().glow, color: color, transparent: true, opacity: 0.42,
+        blending: THREE.AdditiveBlending, depthWrite: false
+      })
+    };
+    return lampMatCache[color];
+  }
+  // (x, z) = pole base; (fx, fz) = unit direction the arm reaches toward
+  function placeStreetlight(x, z, fx, fz, color){
+    var K = lampKit(), M = lampMats(color);
+    var g = new THREE.Group();
+    g.position.set(x, CURB_H, z);
+    g.rotation.y = Math.atan2(fx, fz);
+    var base = new THREE.Mesh(K.base, K.metal); base.position.y = 0.2; g.add(base);
+    var pole = new THREE.Mesh(K.pole, K.metal); pole.position.y = 2.5; pole.castShadow = true; g.add(pole);
+    var arm = new THREE.Mesh(K.arm, K.metal); arm.position.set(0, 4.92, 0.72); g.add(arm);
+    var head = new THREE.Mesh(K.head, K.metal); head.position.set(0, 4.86, 1.45); g.add(head);
+    var bulb = new THREE.Mesh(K.bulb, M.bulb); bulb.rotation.x = Math.PI/2; bulb.position.set(0, 4.79, 1.45); g.add(bulb);
+    scene.add(g);
+    var pool = new THREE.Mesh(K.pool, M.pool);
+    pool.rotation.x = -Math.PI/2;
+    pool.position.set(x + fx*1.45, 0.09, z + fz*1.45);
+    scene.add(pool);
   }
 
-  // Populate one road with buildings + streetlights on both sides.
-  // skipStart/skipEnd guard the ends of an open road; excludeFn lets
-  // callers skip indices near a station.
-  function populateRoad(road, buildStride, lightStride, skipStart, skipEnd, excludeFn, palette, lightColor){
-    var n = road.centerPts.length;
-    var lo = skipStart || 0;
-    var hi = road.closed ? n : n - (skipEnd || 0);
-    for (var i=lo; i<hi; i += buildStride){
-      if (excludeFn && excludeFn(i)) continue;
-      var pt = road.centerPts[i], nrm = road.normals[i];
-      var next = road.centerPts[Math.min(n-1,(i+1)%n)];
-      var prev = road.centerPts[Math.max(0,(i-1+n)%n)];
-      var tang = next.clone().sub(prev).normalize();
-      var rotY = Math.atan2(tang.x, tang.z);
-      placeBuildingAt(pt, nrm, rotY, palette);
-      placeBuildingAt(pt, nrm.clone().negate(), rotY, palette);
+  var TREE = null;
+  function makeTree(pos, scale){
+    if (!TREE){
+      TREE = {
+        trunk: new THREE.CylinderGeometry(0.12, 0.18, 1.4, 6),
+        crown: new THREE.IcosahedronGeometry(1.1, 0),
+        bark: new THREE.MeshStandardMaterial({ color: 0x4a3323, roughness: 1 }),
+        leaves: [0x3f6b3a, 0x4f7a44, 0x355f37].map(function(c){ return new THREE.MeshStandardMaterial({ color: c, roughness: 0.9, flatShading: true }); })
+      };
     }
-    for (var j=lo; j<hi; j += lightStride){
-      var pt2 = road.centerPts[j], nrm2 = road.normals[j];
-      placeStreetlightAt(pt2, nrm2, lightColor);
-      placeStreetlightAt(pt2, nrm2.clone().negate(), lightColor);
+    var s = scale || 1, y0 = pos.y || 0;
+    var trunk = new THREE.Mesh(TREE.trunk, TREE.bark);
+    trunk.scale.setScalar(s);
+    trunk.position.set(pos.x, y0 + 0.7*s, pos.z);
+    trunk.castShadow = true;
+    scene.add(trunk);
+    var crown = new THREE.Mesh(TREE.crown, TREE.leaves[Math.floor(Math.random()*TREE.leaves.length)]);
+    crown.scale.set(s, s*(1.05 + Math.random()*0.25), s);
+    crown.rotation.y = Math.random()*Math.PI;
+    crown.position.set(pos.x, y0 + 1.9*s, pos.z);
+    crown.castShadow = true;
+    scene.add(crown);
+  }
+
+  // Line one road with buildings, staggered street lights and street
+  // trees. Everything near a junction is skipped automatically.
+  function populateRoad(road, o){
+    var JUNCTION_CLEAR = SIDEWALK_OUTER + 2.5;
+    if (o.buildStep){
+      for (var s = o.buildStep/2; s < road.length; s += o.buildStep * (0.85 + Math.random()*0.3)){
+        var f = frameAt(road, s);
+        [1, -1].forEach(function(side){
+          var n = f.normal.clone().multiplyScalar(side);
+          if (o.exclude && o.exclude(f.point, n)) return;
+          placeBuildingAt(f.point, f.tangent, n, o.palette);
+        });
+      }
+    }
+    if (o.lampStep){
+      var k = 0;
+      for (var s2 = o.lampStep/2; s2 < road.length; s2 += o.lampStep, k++){
+        var f2 = frameAt(road, s2), side = (k % 2) ? 1 : -1;
+        var off = STREET_EDGE + 0.55;
+        var px = f2.point.x + f2.normal.x*side*off, pz = f2.point.z + f2.normal.z*side*off;
+        if (distToRoads(px, pz, road) < JUNCTION_CLEAR) continue;
+        if (o.lampSide && o.lampSide(f2.point, f2.normal.clone().multiplyScalar(side)) === false) continue;
+        placeStreetlight(px, pz, -f2.normal.x*side, -f2.normal.z*side, o.lampColor);
+      }
+    }
+    if (o.treeStep){
+      for (var s3 = o.treeStep/2 + 2; s3 < road.length; s3 += o.treeStep){
+        var f3 = frameAt(road, s3);
+        [1, -1].forEach(function(side){
+          var off = SIDEWALK_OUTER - 0.9;
+          var tx = f3.point.x + f3.normal.x*side*off, tz = f3.point.z + f3.normal.z*side*off;
+          if (distToRoads(tx, tz, road) < JUNCTION_CLEAR) return;
+          makeTree(new THREE.Vector3(tx, CURB_H, tz), 0.75);
+        });
+      }
     }
   }
 
@@ -1245,51 +1521,21 @@
     return sprite;
   }
 
-  function distanceToAnyRoad(pos){
-    var best = Infinity;
-    for (var i=0;i<allPts.length;i+=4){
-      var d = pos.distanceTo(allPts[i]);
-      if (d < best) best = d;
+  // Keep the car on the union of all road surfaces: find the closest
+  // centre-line point across every road and clamp to BOUND_LIMIT from
+  // it. Scraping a curb bleeds speed instead of stopping dead.
+  var _probe = { x:0, z:0 }, _best = { x:0, z:0 };
+  function enforceTrackBounds(dt){
+    var best = Infinity, px = car.position.x, pz = car.position.z;
+    for (var i=0;i<roads.length;i++){
+      var d = closestOnRoad(roads[i], px, pz, _probe);
+      if (d < best){ best = d; _best.x = _probe.x; _best.z = _probe.z; }
     }
-    return best;
-  }
-
-  function makeTree(pos){
-    var trunk = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.15,0.2,1.2,6),
-      new THREE.MeshStandardMaterial({ color:0x4a3323, roughness:1 })
-    );
-    trunk.position.set(pos.x, 0.6, pos.z);
-    trunk.castShadow = true;
-    scene.add(trunk);
-    var leaves = new THREE.Mesh(
-      new THREE.SphereGeometry(1.1,8,8),
-      new THREE.MeshStandardMaterial({ color: Math.random()<0.5 ? 0x3f6b3a : 0x4f7a44, roughness:0.9 })
-    );
-    leaves.position.set(pos.x, 1.7, pos.z);
-    leaves.castShadow = true;
-    scene.add(leaves);
-  }
-
-  function nearestAllIndex(pos){
-    var best = 0, bestDist = Infinity;
-    for (var i=0;i<allPts.length;i+=2){
-      var d = pos.distanceToSquared(allPts[i]);
-      if (d < bestDist){ bestDist = d; best = i; }
-    }
-    return best;
-  }
-
-  function enforceTrackBounds(){
-    var idx = nearestAllIndex(car.position);
-    var p = allPts[idx], n = allNormals[idx];
-    var rel = new THREE.Vector3().subVectors(car.position, p);
-    var lateral = rel.dot(n);
-    if (Math.abs(lateral) > BOUND_LIMIT){
-      var clamped = Math.sign(lateral) * BOUND_LIMIT;
-      var forwardComponent = rel.clone().addScaledVector(n, -lateral);
-      car.position.copy(p).add(forwardComponent).addScaledVector(n, clamped);
-      speed *= 0.45;
+    if (best > BOUND_LIMIT && best < Infinity){
+      var k = BOUND_LIMIT / best;
+      car.position.x = _best.x + (px - _best.x)*k;
+      car.position.z = _best.z + (pz - _best.z)*k;
+      speed *= Math.pow(0.15, dt || 0.016);
     }
   }
 
@@ -1313,7 +1559,7 @@
     }
     forwardVec.set(0,0,1).applyQuaternion(car.quaternion);
     car.position.addScaledVector(forwardVec, speed*dt);
-    enforceTrackBounds();
+    enforceTrackBounds(dt);
     speedEl.textContent = Math.round(Math.abs(speed) * 6);
   }
 
@@ -1380,7 +1626,7 @@
 
   resetCar = function(){
     closeOverlay();
-    placeCarAt(hubPtsRef[0], hubPtsRef[1]);
+    placeCarAt(spawn.pt, spawn.next);
     toast('Back at the town square');
   };
 
@@ -1405,8 +1651,9 @@
     var k = MM_SCALE;
     mmCtx.clearRect(0,0,w,h);
     var cx = w/2, cy = h/2;
-    mmCtx.strokeStyle = 'rgba(255,207,138,0.5)';
-    mmCtx.lineWidth = 3;
+    mmCtx.strokeStyle = 'rgba(205,200,188,0.42)';
+    mmCtx.lineWidth = Math.max(3, ROAD_HALF*2*k);
+    mmCtx.lineJoin = 'round'; mmCtx.lineCap = 'round';
     roads.forEach(function(road){
       mmCtx.beginPath();
       for (var i=0;i<road.centerPts.length;i++){
@@ -1449,7 +1696,7 @@
       updateCar(dt);
       updateNearestStation();
       updateLocation();
-      updateCamera(dt);
+      if (!debugCam) updateCamera(dt);
       // gentle bob on shop labels so they read as interactive
       stationMeshes.forEach(function(s, i){
         s.label.position.y = 6.6 + Math.sin(t*2 + i) * 0.18;
@@ -1464,101 +1711,125 @@
   }
   tick();
 
+  // ?debug in the URL exposes a handle for inspecting the scene from
+  // devtools, e.g. __town.topDown(0, 0, 420) for a bird's-eye view.
+  var debugCam = false;
+  if (/[?&]debug\b/.test(location.search)){
+    window.__town = {
+      scene: scene, camera: camera, renderer: renderer,
+      get car(){ return car; },
+      topDown: function(x, z, h){
+        debugCam = true;
+        camera.position.set(x, h, z + 0.01);
+        camera.lookAt(x, 0, z);
+        scene.fog.density = 0;
+      },
+      look: function(px, py, pz, tx, ty, tz){
+        debugCam = true;
+        camera.position.set(px, py, pz);
+        camera.lookAt(tx, ty, tz);
+      },
+      follow: function(){ debugCam = false; }
+    };
+  }
+
   function initWorld(){
     if (worldBuilt) return;
-    // ---- Town square: a small roundabout hub at the origin, with ----
-    // ---- a road spoking out to each of four separate cities.     ----
-    var HUB_RADIUS = 24, HUB_SEGMENTS = 48;
-    var hubPts = [];
-    for (var hi=0; hi<HUB_SEGMENTS; hi++){
-      var a = (hi/HUB_SEGMENTS) * Math.PI * 2;
-      hubPts.push(new THREE.Vector3(Math.cos(a)*HUB_RADIUS, 0, Math.sin(a)*HUB_RADIUS));
-    }
-    hubPtsRef = hubPts;
-    var hubRoad = { key:'hub', centerPts: hubPts, normals: computeNormals(hubPts, true), closed: true };
+    // ================================================================
+    // LAYOUT
+    //
+    //                      [ SKILLS ]  (north)
+    //                          |
+    //   [ CONTACT ] ——— ( town square ) ——— [ PROJECTS ]
+    //                          |
+    //                    [ EXPERIENCE ]  (south)
+    //
+    // Town square: a roundabout. Each city: a rounded-rectangle ring
+    // road with an avenue straight through it; the spoke from the
+    // square meets the ring head-on (crossroads with the avenue) and
+    // the city's shop sits at the far end of the avenue.
+    // ================================================================
+    var UP = new THREE.Vector3(0,1,0);
 
-    function nearestPointIndexIn(pts, guess){
-      var best = 0, bestD = Infinity;
-      for (var i=0;i<pts.length;i++){
-        var dd = pts[i].distanceTo(guess);
-        if (dd < bestD){ bestD = dd; best = i; }
-      }
-      return best;
+    var hubDense = [];
+    for (var hi=0; hi<256; hi++){
+      var a = (hi/256) * Math.PI * 2;
+      hubDense.push(new THREE.Vector3(Math.cos(a)*HUB_RADIUS, 0, Math.sin(a)*HUB_RADIUS));
     }
-    function nearestPointIn(pts, guess){ return pts[nearestPointIndexIn(pts, guess)].clone(); }
+    var hubRoad = makeRoad('hub', resample(hubDense, true, 1), true);
 
-    // Every city is the same rounded-rectangle-with-chicane loop,
-    // scaled and recentered — a real loop to drive around.
-    function makeCityLoopPoints(center, scale, pointCount){
-      var control = [
-        new THREE.Vector3(-32, 0, -18), new THREE.Vector3(  0, 0, -18), new THREE.Vector3( 30, 0, -18),
-        new THREE.Vector3( 44, 0,  -9), new THREE.Vector3( 44, 0,   9), new THREE.Vector3( 30, 0,  18),
-        new THREE.Vector3( 10, 0,  18), new THREE.Vector3(  5, 0,   8), new THREE.Vector3( -5, 0,   8),
-        new THREE.Vector3(-12, 0,  18), new THREE.Vector3(-32, 0,  18), new THREE.Vector3(-46, 0,   9),
-        new THREE.Vector3(-46, 0,  -9)
-      ].map(function(p){ return p.clone().multiplyScalar(scale).add(center); });
-      var curve = new THREE.CatmullRomCurve3(control, true, 'catmullrom', 0.55);
-      return curve.getSpacedPoints(pointCount);
+    function roundedRectLocal(W, H, R){
+      var pts = [], corners = [[W-R, H-R, 0], [-W+R, H-R, 0.5], [-W+R, -H+R, 1], [W-R, -H+R, 1.5]];
+      corners.forEach(function(c){
+        for (var k=0;k<=24;k++){
+          var ang = (c[2] + 0.5*k/24) * Math.PI;
+          pts.push(new THREE.Vector3(c[0] + Math.cos(ang)*R, 0, c[1] + Math.sin(ang)*R));
+        }
+      });
+      return pts;
     }
 
     var HUB_PALETTE = ['#5a5850','#6f6c60','#4a4740','#807c6e'];
     CITY_DEFS = [
-      { key:"skills",     center: new THREE.Vector3(0,0,-140),  color: 0xffb84d,
+      { key:"skills",     dir: new THREE.Vector3(0,0,-1), color: 0xffb84d,
         palette: ['#a3652f','#c98a45','#8a5225','#d9a05c','#6b3d18','#b87a3a'] },
-      { key:"projects",   center: new THREE.Vector3(140,0,0),   color: 0x4da6ff,
+      { key:"projects",   dir: new THREE.Vector3(1,0,0),  color: 0x4da6ff,
         palette: ['#3d5a80','#5a7ba0','#2f4761','#6f8db3','#1f3350','#4d6d8f'] },
-      { key:"experience", center: new THREE.Vector3(0,0,140),   color: 0xff6b9d,
+      { key:"experience", dir: new THREE.Vector3(0,0,1),  color: 0xff6b9d,
         palette: ['#8a4a63','#a85e7d','#6b3548','#c47a98','#4f2536','#96567a'] },
-      { key:"contact",    center: new THREE.Vector3(-140,0,0),  color: 0xa685ff,
+      { key:"contact",    dir: new THREE.Vector3(-1,0,0), color: 0xa685ff,
         palette: ['#5a4a8a','#7060a8','#3f3366','#8f7ac4','#2b2347','#6c5a9e'] }
     ];
 
-    var spokeRoads = [];
+    var spokeRoads = [], avenueRoads = [];
     CITY_DEFS.forEach(function(cd){
-      var cityPts = makeCityLoopPoints(cd.center, 0.9, 220);
-      cd.road = { key: cd.key + 'Loop', centerPts: cityPts, normals: computeNormals(cityPts, true), closed: true };
-      var hubExit = nearestPointIn(hubPts, cd.center);
-      var cityEntry = nearestPointIn(cityPts, new THREE.Vector3(0,0,0));
-      var spokeCurve = new THREE.CatmullRomCurve3([hubExit, cityEntry], false, 'catmullrom', 0.5);
-      var spokePts = spokeCurve.getSpacedPoints(70);
-      spokeRoads.push({ key: cd.key + 'Spoke', centerPts: spokePts, normals: computeNormals(spokePts, false), closed: false });
+      cd.center = cd.dir.clone().multiplyScalar(CITY_DIST);
+      // rotate the city so its local -x side faces the town square
+      var toHub = cd.dir.clone().negate();
+      var theta = Math.atan2(toHub.z, -toHub.x);
+      var toWorld = function(p){ return p.clone().applyAxisAngle(UP, theta).add(cd.center); };
+
+      var ring = roundedRectLocal(CITY_W, CITY_H, CITY_CORNER).map(toWorld);
+      cd.road = makeRoad(cd.key + 'Ring', resample(ring, true, 1), true);
+
+      var nearEnd = toWorld(new THREE.Vector3(-CITY_W, 0, 0));
+      var farEnd  = toWorld(new THREE.Vector3( CITY_W, 0, 0));
+      var hubExit = cd.dir.clone().multiplyScalar(HUB_RADIUS);
+      spokeRoads.push(makeRoad(cd.key + 'Spoke', resample([hubExit, nearEnd], false, 1), false));
+      cd.avenue = makeRoad(cd.key + 'Avenue', resample([nearEnd, farEnd], false, 1), false);
+      avenueRoads.push(cd.avenue);
+      cd.farEnd = farEnd;
     });
 
-    roads = [hubRoad].concat(spokeRoads, CITY_DEFS.map(function(cd){ return cd.road; }));
-    allPts = []; allNormals = [];
-    roads.forEach(function(r){ allPts = allPts.concat(r.centerPts); allNormals = allNormals.concat(r.normals); });
+    roads = [hubRoad].concat(spokeRoads, avenueRoads, CITY_DEFS.map(function(cd){ return cd.road; }));
+    buildStreetNetwork();
 
-    ROAD_HALF = 6; CURB_WIDTH = 1.0; SIDEWALK_WIDTH = 3;
-    STREET_EDGE = ROAD_HALF + CURB_WIDTH;
-    SIDEWALK_OUTER = STREET_EDGE + SIDEWALK_WIDTH;
-    CAR_HALF = 1.15;
-    MAX_SPEED = 26; ACCEL = 17; BRAKE = 27; FRICTION = 10; TURN_RATE = 2.4;
-    BOUND_LIMIT = STREET_EDGE - CAR_HALF;
+    // ---- Park in the middle of the roundabout ----
+    var PARK_R = HUB_RADIUS - SIDEWALK_OUTER;
+    placedFootprints.push({ x:0, z:0, r: PARK_R + 1 });
+    var lawn = new THREE.Mesh(
+      new THREE.CircleGeometry(PARK_R, 48),
+      new THREE.MeshStandardMaterial({ color: 0x2c3a26, roughness: 1 })
+    );
+    lawn.rotation.x = -Math.PI/2; lawn.position.y = 0.012; lawn.receiveShadow = true;
+    scene.add(lawn);
 
-    roads.forEach(buildRoadSurface);
-
-    // ---- One shop per city, on the far side from the hub so ----
-    // ---- arriving means actually driving into the place.     ----
+    // ---- One shop per city, at the far end of its avenue ----
     CITY_DEFS.forEach(function(cd){
       var sec = SECTION_BY_KEY[cd.key];
-      var cityPts = cd.road.centerPts;
-      var farGuess = cd.center.clone().add(cd.center.clone().normalize().multiplyScalar(1000));
-      var idx = nearestPointIndexIn(cityPts, farGuess);
+      var pts = cd.road.centerPts;
+      var idx = 0, bd = Infinity;
+      pts.forEach(function(p, i){ var d = p.distanceTo(cd.farEnd); if (d < bd){ bd = d; idx = i; } });
       cd.stationIdx = idx;
-      var pt = cityPts[idx], n = cd.road.normals[idx];
-      // put the shop on the outer side of the loop
-      var outward = pt.clone().sub(cd.center);
-      if (outward.dot(n) < 0) n = n.clone().negate();
-      // shop's front face sits right at the back of the sidewalk, so a car
-      // in the near lane is comfortably inside triggerRadius
-      var pos = pt.clone().add(n.clone().multiplyScalar(SIDEWALK_OUTER + 2.4));
+      var out = cd.dir.clone();     // far side of the ring faces away from the square
+      var pos = cd.farEnd.clone().addScaledVector(out, SIDEWALK_OUTER + 2.6);
 
       var group = new THREE.Group();
       group.position.copy(pos);
-      group.rotation.y = Math.atan2(-n.x, -n.z);   // shopfront faces the road
+      group.rotation.y = Math.atan2(-out.x, -out.z);   // shopfront faces the avenue
 
       var shop = new THREE.Mesh(
-        new THREE.BoxGeometry(3.2, 5.2, 3.2),
+        new THREE.BoxGeometry(4.2, 5.2, 3.2),
         new THREE.MeshStandardMaterial({ color: cd.color, emissive: cd.color, emissiveIntensity: 0.3, roughness:0.5 })
       );
       shop.position.y = 2.6;
@@ -1566,7 +1837,7 @@
       group.add(shop);
 
       var awning = new THREE.Mesh(
-        new THREE.BoxGeometry(3.8, 0.3, 1.2),
+        new THREE.BoxGeometry(4.8, 0.3, 1.2),
         new THREE.MeshStandardMaterial({ color: cd.color, emissive: cd.color, emissiveIntensity:0.6, roughness:0.4 })
       );
       awning.position.set(0, 2.7, 1.9);
@@ -1577,61 +1848,63 @@
         new THREE.MeshBasicMaterial({ color: cd.color, transparent: true, opacity: 0.8 })
       );
       ring.rotation.x = Math.PI/2;
-      ring.position.y = 0.08;
+      ring.position.set(0, 0.1, 0);
       group.add(ring);
 
       var label = makeLabelSprite(sec.label.toUpperCase(), sec.color);
       label.position.y = 6.6;
       group.add(label);
 
-      var light = new THREE.PointLight(cd.color, 1.3, 20);
-      light.position.y = 4;
+      var light = new THREE.PointLight(cd.color, 1.4, 22);
+      light.position.set(0, 4, 3);
       group.add(light);
 
       scene.add(group);
+      placedFootprints.push({ x: pos.x, z: pos.z, r: 7 });
       stationMeshes.push({ key: cd.key, position: pos, group: group, label: label, ring: ring, cityCenter: cd.center, triggerRadius: 13 });
     });
 
-    // ---- Buildings + streetlights: neutral around the hub and    ----
-    // ---- along the spokes, themed per city inside each city loop ----
-    populateRoad(hubRoad, 5, 10, 0, 0, null, HUB_PALETTE, 0xffcf8a);
-    spokeRoads.forEach(function(r){ populateRoad(r, 9, 18, 6, 6, null, HUB_PALETTE, 0xffcf8a); });
+    // ---- Buildings, street lights and street trees ----
+    populateRoad(hubRoad, { buildStep: 7, lampStep: 13, palette: HUB_PALETTE, lampColor: 0xffcf8a });
+    spokeRoads.forEach(function(r){
+      populateRoad(r, { buildStep: 9, lampStep: 16, treeStep: 16, palette: HUB_PALETTE, lampColor: 0xffcf8a });
+    });
     CITY_DEFS.forEach(function(cd){
-      var n = cd.road.centerPts.length;
-      populateRoad(cd.road, 8, 16, 0, 0, function(i){
-        return Math.min(Math.abs(i - cd.stationIdx), n - Math.abs(i - cd.stationIdx)) < 14;
-      }, cd.palette, cd.color);
+      populateRoad(cd.avenue, { buildStep: 8, lampStep: 14, treeStep: 14, palette: cd.palette, lampColor: cd.color });
+      populateRoad(cd.road,   { buildStep: 8, lampStep: 16, palette: cd.palette, lampColor: cd.color });
 
-      // faint tinted ground disc so each city reads as its own place
+      // faint tinted ground so each city reads as its own place
       var tint = new THREE.Mesh(
-        new THREE.CircleGeometry(85, 32),
-        new THREE.MeshBasicMaterial({ color: cd.color, transparent:true, opacity:0.1, depthWrite:false })
+        new THREE.CircleGeometry(CITY_W + 22, 64),
+        new THREE.MeshStandardMaterial({ map: ground.material.map, roughness: 1,
+          color: new THREE.Color(0xffffff).lerp(new THREE.Color(cd.color), 0.45).multiplyScalar(1.15) })
       );
       tint.rotation.x = -Math.PI/2;
-      tint.position.set(cd.center.x, 0.015, cd.center.z);
+      tint.position.set(cd.center.x, 0.008, cd.center.z);
+      tint.receiveShadow = true;
       scene.add(tint);
     });
 
-    // ---- Park + fountain in the town square ----
+    // ---- Park trees + fountain ----
     var treesPlaced = 0, attempts = 0;
-    while (treesPlaced < 16 && attempts < 500){
+    while (treesPlaced < 14 && attempts < 500){
       attempts++;
-      var ringMax = HUB_RADIUS - SIDEWALK_OUTER - 2;
-      var p = new THREE.Vector3((Math.random()-0.5)*2*ringMax, 0, (Math.random()-0.5)*2*ringMax);
-      if (p.length() < ringMax && p.length() > 6){ makeTree(p); treesPlaced++; }
+      var ang = Math.random()*Math.PI*2, rad = 7 + Math.random()*(PARK_R - 9);
+      makeTree(new THREE.Vector3(Math.cos(ang)*rad, 0, Math.sin(ang)*rad), 0.9 + Math.random()*0.3);
+      treesPlaced++;
     }
 
-    var plazaBase = new THREE.Mesh(new THREE.CylinderGeometry(4.5,4.5,0.15,24), new THREE.MeshStandardMaterial({ color:0x6a6558, roughness:0.9 }));
+    var plazaBase = new THREE.Mesh(new THREE.CylinderGeometry(4.5,4.5,0.15,32), new THREE.MeshStandardMaterial({ color:0x6a6558, roughness:0.9 }));
     plazaBase.position.set(0, 0.08, 0);
     plazaBase.receiveShadow = true;
     scene.add(plazaBase);
 
-    var fountainRim = new THREE.Mesh(new THREE.CylinderGeometry(1.6,1.7,0.5,20), new THREE.MeshStandardMaterial({ color:0x8a8474, roughness:0.8 }));
+    var fountainRim = new THREE.Mesh(new THREE.CylinderGeometry(1.6,1.7,0.5,24), new THREE.MeshStandardMaterial({ color:0x8a8474, roughness:0.8 }));
     fountainRim.position.set(0, 0.33, 0);
     fountainRim.castShadow = true;
     scene.add(fountainRim);
 
-    var fountainWater = new THREE.Mesh(new THREE.CylinderGeometry(1.3,1.3,0.45,20), new THREE.MeshStandardMaterial({ color:0x3a6d8f, emissive:0x1c4a63, emissiveIntensity:0.4, roughness:0.3 }));
+    var fountainWater = new THREE.Mesh(new THREE.CylinderGeometry(1.3,1.3,0.45,24), new THREE.MeshStandardMaterial({ color:0x3a6d8f, emissive:0x1c4a63, emissiveIntensity:0.4, roughness:0.3 }));
     fountainWater.position.set(0, 0.4, 0);
     scene.add(fountainWater);
 
@@ -1639,47 +1912,55 @@
     fountainSpout.position.set(0, 1.1, 0);
     scene.add(fountainSpout);
 
-    var fountainLight = new THREE.PointLight(0x8fd6ff, 0.6, 10);
+    var fountainLight = new THREE.PointLight(0x8fd6ff, 0.8, 14);
     fountainLight.position.set(0, 1.5, 0);
     scene.add(fountainLight);
 
-    // ---- Signposts at each hub exit, pointing to the city ----
+    // ---- Signposts on each spoke, pointing to the city ----
     CITY_DEFS.forEach(function(cd){
       var sec = SECTION_BY_KEY[cd.key];
-      var dir = cd.center.clone().normalize();
-      var side = new THREE.Vector3(-dir.z, 0, dir.x);
-      var at = dir.clone().multiplyScalar(HUB_RADIUS + 16).addScaledVector(side, STREET_EDGE + 1.2);
-      var post = new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.07,3,6), new THREE.MeshStandardMaterial({ color:0x2a2a2e }));
-      post.position.set(at.x, 1.5, at.z);
+      var side = new THREE.Vector3(-cd.dir.z, 0, cd.dir.x);
+      var at = cd.dir.clone().multiplyScalar(HUB_RADIUS + SIDEWALK_OUTER + 9).addScaledVector(side, -(STREET_EDGE + 1.6));
+      var post = new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.07,3,6), lampKit().metal);
+      post.position.set(at.x, CURB_H + 1.5, at.z);
       scene.add(post);
       var sign = makeLabelSprite((sec.index+1) + ' ' + sec.label.toUpperCase() + ' →', sec.color);
       sign.scale.set(5, 1.25, 1);
-      sign.position.set(at.x, 3.3, at.z);
+      sign.position.set(at.x, CURB_H + 3.3, at.z);
       scene.add(sign);
     });
 
-    // ---- Traffic light prop beside the hub plaza ----
+    // ---- Traffic lights on the corners where spokes leave the square ----
     if (ASSETS.trafficLight){
-      var tlModel = ASSETS.trafficLight.clone(true);
-      tlModel.position.set(0,0,0);
-      tlModel.quaternion.identity();
-      tlModel.scale.set(1,1,1);
-      tlModel.updateMatrixWorld(true);
-      var tlBox = new THREE.Box3().setFromObject(tlModel);
-      var tlSize = tlBox.getSize(new THREE.Vector3());
-      var tlCenter = tlBox.getCenter(new THREE.Vector3());
-      var tlScale = 7 / tlSize.y;
-      tlModel.position.x -= tlCenter.x;
-      tlModel.position.z -= tlCenter.z;
-      tlModel.position.y -= tlBox.min.y;
-      tlModel.scale.setScalar(tlScale);
-      tlModel.position.multiplyScalar(tlScale);
-      var tlSpot = hubPts[0].clone().addScaledVector(new THREE.Vector3(hubPts[0].x, 0, hubPts[0].z).normalize(), SIDEWALK_OUTER + 6);
-      tlModel.position.x += tlSpot.x;
-      tlModel.position.z += tlSpot.z;
-      tlModel.traverse(function(o){ if (o.isMesh){ o.castShadow = true; o.receiveShadow = true; } });
-      scene.add(tlModel);
+      var tlProto = ASSETS.trafficLight.clone(true);
+      tlProto.updateMatrixWorld(true);
+      var tlBox = new THREE.Box3().setFromObject(tlProto);
+      var tlSize = tlBox.getSize(new THREE.Vector3()), tlCenter = tlBox.getCenter(new THREE.Vector3());
+      var tlScale = 5.2 / tlSize.y;
+      var tlPivot = new THREE.Group();
+      tlProto.position.set(-tlCenter.x, -tlBox.min.y, -tlCenter.z);
+      tlPivot.add(tlProto);
+      tlPivot.scale.setScalar(tlScale);
+      tlPivot.traverse(function(o){ if (o.isMesh){ o.castShadow = true; } });
+
+      CITY_DEFS.forEach(function(cd){
+        var side = new THREE.Vector3(-cd.dir.z, 0, cd.dir.x);
+        // right-hand corner for traffic arriving from the city
+        var at = cd.dir.clone().multiplyScalar(HUB_RADIUS + STREET_EDGE + 1.3).addScaledVector(side, -(STREET_EDGE + 1.0));
+        var tl = tlPivot.clone(true);
+        tl.position.set(at.x, CURB_H, at.z);
+        tl.rotation.y = Math.atan2(cd.dir.x, cd.dir.z);   // faces drivers heading into the square
+        scene.add(tl);
+      });
     }
+
+    // spawn on the roundabout, between two spokes
+    (function(){
+      var pts = hubRoad.centerPts, n = pts.length, want = new THREE.Vector3(1,0,1).normalize().multiplyScalar(HUB_RADIUS);
+      var i = 0, bd = Infinity;
+      pts.forEach(function(p, k){ var d = p.distanceTo(want); if (d < bd){ bd = d; i = k; } });
+      spawn = { pt: pts[i], next: pts[(i+1) % n] };
+    })();
 
     // ---- Car ----
     car = new THREE.Group();
@@ -1738,7 +2019,7 @@
     camOffset = new THREE.Vector3(0, 4.2, -8.5);
     camTarget = new THREE.Vector3();
     scene.add(car);
-    placeCarAt(hubPts[0], hubPts[1]);
+    placeCarAt(spawn.pt, spawn.next);
 
     // ---- Touch controls ----
     function bindHold(id, onFlag){

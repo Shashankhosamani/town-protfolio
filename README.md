@@ -25,7 +25,7 @@ python3 -m http.server 8000
 
 Then open <http://localhost:8000>.
 
-If you do open `index.html` straight from disk, it still works, but it uses simple procedural shapes instead of the real road, car and traffic-light models, and shows a notice saying so.
+If you do open `index.html` straight from disk, it still works, but it uses a simple procedural car and skips the traffic lights, and it shows a notice saying so. The roads are generated in code either way.
 
 ## Edit your content
 
@@ -79,27 +79,38 @@ The old `portfolio-track-demo.html` URL redirects to `index.html`.
 ```
 index.html        app: intro, HUD, panels, page view, 3D world
 content.js        ← all portfolio copy (edit this)
-road_modular/                                   road tiles + light poles   (used)
 dodge_challenger_-_muscle_car_-_low-poly/       player car                 (used)
-australian_traffic_light__pedestrain_light/     traffic light prop         (used)
-city_scene/, neighbourhood_city_modular_lowpoly/, modular_bridge…/,
-1998_ducati_748/, 2018_bmw_r_ninet_pure/, ford_*/                          (not used yet)
+australian_traffic_light__pedestrain_light/     traffic lights at junctions (used)
+road_modular/, city_scene/, neighbourhood_city_modular_lowpoly/, modular_bridge…/,
+1998_ducati_748/, 2018_bmw_r_ninet_pure/, ford_*/                          (not used)
 ```
 
 The page loads only the `scene.web.gltf` files, which use small textures from `textures_web/`. Each model loads in the background while the intro screen shows. If a model fails, the page falls back to procedural geometry.
 
 ### How the world is built (`initWorld` in `index.html`)
 
-- **Roads**: a circular hub, four spline spokes, and four looping city roads. Each one is a centre-line point list. The road-kit GLTF tile is stretched along it, or a flat ribbon is used if the model didn't load. Curbs and sidewalks are ribbons offset along the normals.
-- **Collision**: the car's sideways offset from the nearest road centre-line is clamped to the curb. Hitting the edge slows the car down.
-- **Cities**: each one has its own building palette, streetlight colour and tinted ground disc. Its shop sits on the far side of the loop from the hub.
+```
+                     [ SKILLS ]            north
+                         |
+  [ CONTACT ] —— ( town square ) —— [ PROJECTS ]
+                         |
+                  [ EXPERIENCE ]           south
+```
+
+- **Layout**: the town square is a roundabout (`HUB_RADIUS`) with a park and fountain in the middle. A straight spoke leaves it in each direction for `CITY_DIST` metres. Each city is a rounded-rectangle ring road (`CITY_W` × `CITY_H`, corner radius `CITY_CORNER`) with an avenue straight through the middle. The spoke meets the ring at a crossroads with the avenue, and the city's shop sits at the far end of the avenue.
+- **Street cross-section**: there are two lanes (`ROAD_HALF` each side of centre), a raised curb (`CURB_W` × `CURB_H`) and a tiled sidewalk (`SIDEWALK_W`). Every road is a centre-line resampled to about 1 point per metre. Asphalt, curbs, sidewalks and walls are generated from it and batched into one mesh per material.
+- **Junctions**: no junction is placed by hand. On each road, any stretch of curb, sidewalk or edge line that would land on *another* road's asphalt is removed. The exact cut point is found by bisection, so curbs meet in clean L-shaped corners. Crosswalks and stop lines are added automatically where an open road meets another road.
+- **Textures**: asphalt and paving are canvas-generated and use world-space UVs, so overlapping pieces at junctions line up seamlessly.
+- **Street lights**: these are procedural poles with a glowing head and an additive light pool on the road, rather than real lights. That keeps the frame rate up, because about 150 real point lights would make the shaders very slow.
+- **Buildings**: buildings line every street. A building is only placed if all four corners of its footprint are clear of every road's sidewalk and of other buildings, so nothing ends up in a junction or on the inside of a bend.
+- **Collision**: the car stays on the union of all road surfaces. Its distance to the nearest centre-line is clamped so the wheels stay off the curb, and scraping a curb slows the car down.
 - **Shops**: a shop opens its panel when the car is within 13 units of it.
+- **Debug view**: add `?debug` to the URL, then use `__town.topDown(x, z, height)` in the console for a bird's-eye view of any area. `__town.follow()` returns to the chase camera.
 
 ## Credits & licences
 
-These models are used under their Sketchfab licences. The **CC BY 4.0** licence requires visible attribution, which the in-app page view shows under **Credits**.
+These models are used under their Sketchfab licences. Credits also appear in the in-app page view under **Credits**.
 
-- "Road Modular" by mortalityrexotable, CC BY 4.0
 - "Dodge Challenger – Muscle Car – Low-Poly" by Allay Design, Sketchfab Standard
 - "Australian Traffic Light & Pedestrian Light" by JoTrain The Aussie, Sketchfab Standard
 
