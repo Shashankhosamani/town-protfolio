@@ -29,23 +29,40 @@ If you do open `index.html` straight from disk, it still works, but it uses a si
 
 ## Edit your content
 
-**All text lives in [`content.js`](content.js).** You never need to touch `index.html` to update the portfolio.
+**All content lives in [`portfolio.json`](portfolio.json).** It's plain data. You never touch `index.html` to update the portfolio, and everything follows the file: the landing card, the section panels, the page view and the billboards in the 3D town.
 
-```js
-window.PORTFOLIO = {
-  profile:    { name, handle, role, tagline, location, resumeUrl },
-  projects:   { title, intro, items: [{ name, year, summary, details[], tags[], links[{label,url}] }] },
-  skills:     { title, intro, groups: [{ name, items[] }] },
-  experience: { title, intro, items: [{ role, org, period, summary, highlights[] }] },
-  contact:    { title, intro, links: [{ kind, label, value, url }] }
-};
+```jsonc
+{
+  "profile":    { "name", "handle", "role", "tagline", "location", "resumeUrl", "highlights": [], "topSkills": [] },
+  "projects":   { "title", "intro", "items":  [{ "name", "year", "summary", "details": [], "tags": [], "links": [{ "label", "url" }] }] },
+  "skills":     { "title", "intro", "groups": [{ "name", "items": [] }] },
+  "experience": { "title", "intro", "items":  [{ "role", "org", "period", "summary", "highlights": [] }] },
+  "contact":    { "title", "intro", "links":  [{ "kind", "label", "value", "url" }] }
+}
 ```
 
-- Any text containing `TODO` is highlighted in amber on the page, so you can see which placeholders are left.
-- Links only show when `url` starts with `http(s)://`, `mailto:` or `tel:`. Leave it `""` to hide the button.
-- An email contact without a `url` gets a `mailto:` link automatically. Every contact gets a **Copy** button.
-- Set `profile.resumeUrl` to show a "Résumé" button on the intro screen.
-- Text is HTML-escaped, so you can type `<`, `&` and similar characters safely.
+### Common edits
+
+| To… | Do this |
+|---|---|
+| **Add** a project, job, skill group or contact | Copy an existing `{ … }` block in its list, paste it after a comma, and change the text. A new billboard appears in that city. |
+| **Remove** one | Delete its `{ … }` block, and the comma before it if it was the last one. |
+| **Reorder** | Move the blocks. Billboards follow the list order; put your best project and most recent job first. |
+| **Hide a whole section** | Empty its list (`"items": []`) or delete the section. Its city stays, without billboards. |
+| **Hide one field** | Set it to `""` or delete it. Empty fields simply don't show. |
+
+There's **no limit** on items. Billboards are spread along each city's avenue (7 fit), and any extra continue around that city's ring road.
+
+### Editing tips
+
+- **Autocomplete and checking**: `portfolio.json` points at [`portfolio.schema.json`](portfolio.schema.json). VS Code and most editors use it to suggest field names, show descriptions on hover, and underline mistakes such as a misspelt `"nmae"` or a list where text should be.
+- **Live preview**: run `python3 -m http.server 8000` and open <http://localhost:8000>. While it's open on `localhost`, **saving `portfolio.json` reloads the page automatically**.
+- **Mistakes are explained, not silent**:
+  - **Syntax errors**: a typo such as a missing or extra comma shows a red bar on the page naming the line and column, plus the usual causes.
+  - **Wrong data**: an item of the wrong type, or one missing its name, is skipped, and the browser console lists what to fix. The rest of the site keeps working.
+- **Placeholders**: any text containing `TODO` is highlighted in amber on the site and on the billboards, so you can see what's left to fill in.
+- **Links**: buttons only show when `url` starts with `http(s)://`, `mailto:` or `tel:`. An email contact without a `url` gets a `mailto:` link automatically, and every contact gets a **Copy** button. Set `profile.resumeUrl` to add a Résumé button.
+- **Special characters**: text is HTML-escaped, so `<`, `&` and similar characters are safe. Inside JSON strings, write a double quote as `\"`.
 
 ## Controls
 
@@ -82,7 +99,8 @@ The old `portfolio-track-demo.html` URL redirects to `index.html`.
 
 ```
 index.html        app: intro, HUD, panels, page view, 3D world
-content.js        ← all portfolio copy (edit this)
+portfolio.json    ← all portfolio content (edit this)
+portfolio.schema.json   field descriptions + validation for editors
 models/cars/                                    Kenney cars (CC0): 6 drivable + 5 traffic-only, shared texture
 dodge_challenger_-_muscle_car_-_low-poly/       "Muscle car" option, loaded only if chosen
 australian_traffic_light__pedestrain_light/     traffic lights at junctions (used)

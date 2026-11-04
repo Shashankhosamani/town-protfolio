@@ -11,8 +11,7 @@
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-<!-- All portfolio copy lives here. Edit content.js, not this file. -->
-<script src="content.js"></script>
+<!-- All portfolio content lives in portfolio.json (loaded at startup). -->
 <style>
   :root{
     --bg: #0c0f18;
@@ -520,7 +519,8 @@
 </div>
 
 <script>
-(function(){
+// The whole app. Runs once portfolio.json has loaded (see bootstrap at the bottom).
+function startTown(PORTFOLIO){
   "use strict";
 
   // ---------------------------------------------------------------
@@ -546,7 +546,7 @@
   // what still needs real content.
   function txt(s){
     var e = esc(s);
-    return /TODO/.test(s || '') ? '<span class="todo" title="Placeholder — edit content.js">' + e + '</span>' : e;
+    return /TODO/.test(s || '') ? '<span class="todo" title="Placeholder — edit portfolio.json">' + e + '</span>' : e;
   }
   function isRealUrl(u){ return typeof u === 'string' && /^(https?:|mailto:|tel:)/i.test(u); }
 
@@ -560,9 +560,9 @@
   }
 
   // ---------------------------------------------------------------
-  // Content (from content.js) + section registry
+  // Content (from portfolio.json) + section registry
   // ---------------------------------------------------------------
-  var P = window.PORTFOLIO || {};
+  var P = PORTFOLIO || {};
   var profile = P.profile || {};
 
   // Order here = fast-travel keys 1..4 and panel prev/next order.
@@ -2764,9 +2764,9 @@
   }
 
   var BB = null;
-  function placeBillboard(cd, key, i, s, side){
+  function placeBillboard(cd, key, i, road, s, side){
     var c = billboardContent(key, i);
-    if (!c) return;
+    if (!c) return false;
     if (!BB){
       BB = {
         board: new THREE.PlaneGeometry(7.2, 4.5),
@@ -2775,7 +2775,7 @@
         metal: new THREE.MeshStandardMaterial({ color: 0x23262d, roughness: 0.5, metalness: 0.6 })
       };
     }
-    var road = cd.avenue, f = frameAt(road, s);
+    var f = frameAt(road, s);
     var n = f.normal.clone().multiplyScalar(side);                       // from road toward the lot
     var pos = f.point.clone().addScaledVector(n, SIDEWALK_OUTER + 1.7);
     // face the road, angled toward drivers arriving from the town square
@@ -2798,6 +2798,7 @@
     billboardSpots.push({ x: pos.x, z: pos.z });
     stationMeshes.push({ key: key, item: i, kind: 'item', title: c.title, position: new THREE.Vector3(pos.x, 0, pos.z),
                          triggerRadius: 12.5, cityCenter: cd.center });
+    return true;
   }
   function nearBillboard(x, z, r){
     for (var i=0;i<billboardSpots.length;i++){
@@ -3094,14 +3095,31 @@
       stationMeshes.push({ key: cd.key, position: pos, group: group, label: label, ring: ring, cityCenter: cd.center, triggerRadius: 13 });
     });
 
-    // ---- Billboards: one per portfolio item along each avenue ----
+    // ---- Billboards: one per portfolio item ----
+    // Spread evenly along the avenue; if a section outgrows it, the
+    // rest continue around that city's ring road. No limit.
     CITY_DEFS.forEach(function(cd){
-      var n = Math.min(sectionItems(cd.key).length, 8);
-      var s0 = 18, s1 = cd.avenue.length - 20;
-      for (var i=0;i<n;i++){
-        var s = n === 1 ? (s0 + s1)/2 : s0 + (s1 - s0) * i/(n-1);
-        placeBillboard(cd, cd.key, i, s, i % 2 ? 1 : -1);
+      var n = sectionItems(cd.key).length;
+      var av = cd.avenue, s0 = 18, s1 = av.length - 20, SPACING = 9;
+      var cap = Math.floor((s1 - s0) / SPACING) + 1;
+      var onAvenue = Math.min(n, cap);
+      for (var i=0;i<onAvenue;i++){
+        var s = onAvenue === 1 ? (s0 + s1)/2 : s0 + (s1 - s0) * i/(onAvenue-1);
+        placeBillboard(cd, cd.key, i, av, s, i % 2 ? 1 : -1);
       }
+      var ring = cd.road, k = onAvenue;
+      for (var rs = 8; k < n && rs < ring.length; rs += 13){
+        [1, -1].forEach(function(side){
+          if (k >= n) return;
+          var f = frameAt(ring, rs), off = SIDEWALK_OUTER + 1.7;
+          var x = f.point.x + f.normal.x*side*off, z = f.point.z + f.normal.z*side*off;
+          // keep clear of junctions, the shop and other billboards
+          if (distToRoads(x, z, ring) < SIDEWALK_OUTER + 5) return;
+          if (!footprintFree(x, z, 4.6)) return;
+          if (placeBillboard(cd, cd.key, k, ring, rs, side)) k++;
+        });
+      }
+      if (k < n) console.warn('[portfolio] ' + (n - k) + ' ' + cd.key + ' item(s) had no room for a billboard — they still appear in the panel and page view.');
     });
 
     // ---- Buildings, street lights and street trees ----
@@ -3311,6 +3329,107 @@
     }
   });
 
+}
+
+// ---------------------------------------------------------------
+// Bootstrap: load portfolio.json, check it, start the town.
+//  • A JSON typo is reported with its line and column.
+//  • Missing sections/fields are tolerated (they simply don't show);
+//    likely mistakes are listed in the console.
+//  • On localhost the file is watched: save it and the page reloads.
+// ---------------------------------------------------------------
+(function bootstrap(){
+  "use strict";
+  var URL_ = 'portfolio.json';
+
+  function fail(title, detail){
+    var bar = document.getElementById('fatal-error');
+    bar.textContent = title + (detail ? '\n' + detail : '');
+    bar.style.display = 'block';
+    var lede = document.getElementById('intro-lede');
+    if (lede) lede.textContent = title;
+    var btn = document.getElementById('start-btn');
+    if (btn){ btn.disabled = true; btn.textContent = "Content didn't load"; }
+    var st = document.getElementById('load-status');
+    if (st) st.textContent = '';
+    // nothing else on the card can work without content
+    ['intro-list-btn', 'car-pick', 'intro-controls', 'load-bar'].forEach(function(id){
+      var el = document.getElementById(id); if (el) el.style.display = 'none';
+    });
+    var legend = document.querySelector('#intro .city-legend'); if (legend) legend.style.display = 'none';
+    var ex = document.querySelector('#intro .intro-explore-h'); if (ex) ex.style.display = 'none';
+  }
+
+  function lineCol(text, pos){
+    var before = text.slice(0, pos), line = before.split('\n').length;
+    return { line: line, col: pos - before.lastIndexOf('\n') };
+  }
+  function parse(text){
+    try { return JSON.parse(text); }
+    catch(e){
+      var m = /position (\d+)/.exec(e.message), where = '';
+      var lc = /line (\d+) column (\d+)/.exec(e.message);
+      if (lc) where = ' (line ' + lc[1] + ', column ' + lc[2] + ')';
+      else if (m){ var p = lineCol(text, +m[1]); where = ' (line ' + p.line + ', column ' + p.col + ')'; }
+      throw new Error('portfolio.json has a syntax error' + where + ': ' + e.message +
+        '\nCommon causes: a missing comma between items, a trailing comma after the last item, or an unescaped " inside text.');
+    }
+  }
+
+  // Fill in missing pieces so the app never trips over absent data,
+  // and point out likely mistakes.
+  function normalize(d){
+    var warn = [];
+    function obj(x){ return x && typeof x === 'object' && !Array.isArray(x) ? x : {}; }
+    function arr(x, where){
+      if (x === undefined) return [];
+      if (!Array.isArray(x)){ warn.push(where + ' should be a list [ … ]'); return []; }
+      return x.filter(function(v, i){
+        if (v && typeof v === 'object') return true;
+        warn.push(where + '[' + i + '] should be an object { … } — skipped'); return false;
+      });
+    }
+    d = obj(d);
+    d.profile = obj(d.profile);
+    if (!d.profile.name) warn.push('profile.name is empty');
+    ['projects', 'skills', 'experience', 'contact'].forEach(function(k){ d[k] = obj(d[k]); });
+    d.projects.items = arr(d.projects.items, 'projects.items');
+    d.skills.groups = arr(d.skills.groups, 'skills.groups');
+    d.experience.items = arr(d.experience.items, 'experience.items');
+    d.contact.links = arr(d.contact.links, 'contact.links');
+    d.projects.items.forEach(function(p, i){ if (!p.name) warn.push('projects.items[' + i + '] has no "name"'); });
+    d.skills.groups.forEach(function(g, i){ if (!g.name) warn.push('skills.groups[' + i + '] has no "name"'); });
+    d.experience.items.forEach(function(x, i){ if (!x.role && !x.org) warn.push('experience.items[' + i + '] has no "role" or "org"'); });
+    d.contact.links.forEach(function(l, i){ if (!l.label) warn.push('contact.links[' + i + '] has no "label"'); });
+    if (warn.length) console.warn('[portfolio.json]\n  • ' + warn.join('\n  • '));
+    return d;
+  }
+
+  function watch(lastText){
+    if (!/^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])$/.test(location.hostname)) return;
+    setInterval(function(){
+      fetch(URL_, { cache: 'no-store' }).then(function(r){ return r.ok ? r.text() : null; }).then(function(t){
+        if (t !== null && t !== lastText){ console.info('[portfolio.json] changed — reloading'); location.reload(); }
+      }).catch(function(){});
+    }, 1500);
+  }
+
+  fetch(URL_, { cache: 'no-cache' })
+    .then(function(r){
+      if (!r.ok) throw new Error("Couldn't load portfolio.json (HTTP " + r.status + ').');
+      return r.text();
+    })
+    .then(function(text){
+      startTown(normalize(parse(text)));
+      watch(text);
+    })
+    .catch(function(err){
+      var fileHint = location.protocol === 'file:'
+        ? 'Browsers block reading portfolio.json when the page is opened as a file. In this folder run:  python3 -m http.server  then open http://localhost:8000'
+        : '';
+      console.error(err);
+      fail(String(err.message || err), fileHint);
+    });
 })();
 </script>
 </body>

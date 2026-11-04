@@ -1,0 +1,139 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Portfolio Town content",
+  "description": "Everything visitors read in Portfolio Town. Add, remove or reorder items freely — the landing card, panels, page view and the billboards in the 3D town all follow this file. Any text containing TODO is highlighted in amber on the site.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "profile": {
+      "type": "object",
+      "description": "Who you are. Shown on the landing card, the HUD and the page view.",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name":     { "type": "string", "description": "Your full name — the big heading." },
+        "handle":   { "type": "string", "description": "Short brand shown top-left while driving, e.g. SHASHANK.DEV." },
+        "role":     { "type": "string", "description": "One line under your name." },
+        "tagline":  { "type": "string", "description": "One sentence about what you do." },
+        "location": { "type": "string", "description": "City, Country. Hidden while it still contains TODO." },
+        "resumeUrl":{ "type": "string", "description": "Link to your CV (https://…). Adds a Résumé button. Leave empty to hide." },
+        "highlights": {
+          "type": "array", "maxItems": 4, "items": { "type": "string" },
+          "description": "2–4 one-liners on the landing card. Lead with outcomes."
+        },
+        "topSkills": {
+          "type": "array", "items": { "type": "string" },
+          "description": "Chips on the landing card. Leave empty to pick automatically from the skills section."
+        }
+      }
+    },
+    "projects": {
+      "type": "object",
+      "description": "The Projects city (east). One billboard per item.",
+      "additionalProperties": false,
+      "properties": {
+        "title": { "type": "string" },
+        "intro": { "type": "string" },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name"],
+            "properties": {
+              "name":    { "type": "string", "description": "Project name — billboard headline." },
+              "year":    { "type": "string" },
+              "summary": { "type": "string", "description": "One sentence — shown on the billboard." },
+              "details": { "type": "array", "items": { "type": "string" }, "description": "Bullet points in the panel." },
+              "tags":    { "type": "array", "items": { "type": "string" }, "description": "Tech / topic chips." },
+              "links":   { "$ref": "#/definitions/links" }
+            }
+          }
+        }
+      }
+    },
+    "skills": {
+      "type": "object",
+      "description": "The Skills city (north). One billboard per group.",
+      "additionalProperties": false,
+      "properties": {
+        "title": { "type": "string" },
+        "intro": { "type": "string" },
+        "groups": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "items"],
+            "properties": {
+              "name":  { "type": "string", "description": "Group name, e.g. Backend." },
+              "items": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        }
+      }
+    },
+    "experience": {
+      "type": "object",
+      "description": "The Experience city (south). One billboard per job, in this order — put the most recent first.",
+      "additionalProperties": false,
+      "properties": {
+        "title": { "type": "string" },
+        "intro": { "type": "string" },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["role"],
+            "properties": {
+              "role":       { "type": "string" },
+              "org":        { "type": "string", "description": "Company — billboard headline." },
+              "period":     { "type": "string", "description": "e.g. 2024 — Present" },
+              "summary":    { "type": "string" },
+              "highlights": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        }
+      }
+    },
+    "contact": {
+      "type": "object",
+      "description": "The Contact city (west). One billboard per link.",
+      "additionalProperties": false,
+      "properties": {
+        "title": { "type": "string" },
+        "intro": { "type": "string" },
+        "links": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["label"],
+            "properties": {
+              "kind":  { "enum": ["email", "github", "linkedin", "x", "website", "other"], "description": "Only changes the icon." },
+              "label": { "type": "string", "description": "e.g. GitHub" },
+              "value": { "type": "string", "description": "What's displayed, e.g. github.com/you. For email, the address (a mailto: link is made for you)." },
+              "url":   { "type": "string", "description": "https://… — leave empty to show the value without a link." }
+            }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "links": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["label"],
+        "properties": {
+          "label": { "type": "string", "description": "Button text, e.g. Code or Live." },
+          "url":   { "type": "string", "description": "https://… — buttons with an empty url are hidden." }
+        }
+      }
+    }
+  }
+}
