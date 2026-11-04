@@ -718,7 +718,7 @@
   // 3D model credits — several of these are CC-BY, which REQUIRES
   // visible attribution wherever the work is shared.
   var CREDITS = [
-    { title:'Car Kit (sports sedan, hot hatch, race car, police, taxi, SUV)', author:'Kenney', url:'https://kenney.nl/assets/car-kit', license:'CC0', site:'kenney.nl' },
+    { title:'Car Kit (player cars and traffic)', author:'Kenney', url:'https://kenney.nl/assets/car-kit', license:'CC0', site:'kenney.nl' },
     { title:'Dodge Challenger – Muscle Car – Low-Poly', author:'Allay Design', url:'https://sketchfab.com/3d-models/dodge-challenger-muscle-car-low-poly-4c741c8d40c34ebe8b999e5a2823d80f', license:'Sketchfab Standard' },
     { title:'Australian Traffic Light & Pedestrian Light', author:'JoTrain The Aussie', url:'https://sketchfab.com/3d-models/australian-traffic-light-pedestrain-light-72b20af0bca44dfab473cbbd1f0af7a2', license:'Sketchfab Standard' }
   ];
@@ -1975,6 +1975,12 @@
       r.scale.set(0.45, 1, 1);
       r.position.set(s*w*0.12, b.min.y + hgt*0.47, b.min.z - 0.02); r.rotation.y = Math.PI; body.add(r);
     });
+    var headMat = new THREE.MeshBasicMaterial({ color: 0xfff1cf });
+    [-1, 1].forEach(function(s){
+      var hl = new THREE.Mesh(lampGeo, headMat);
+      hl.scale.set(0.9, 1.2, 1);
+      hl.position.set(s*w*0.3, b.min.y + hgt*0.42, b.max.z + 0.02); body.add(hl);
+    });
     rig.lights = { brake: brakeMat, reverse: revMat };
     return rig;
   }
@@ -2083,6 +2089,8 @@
       vF = CS.vx*fx + CS.vz*fz;
     }
 
+    collideTraffic();
+    if (traffic.length) vF = CS.vx*fx + CS.vz*fz;
     var la = (vF - CS.vF) / h;
     CS.longAcc += (la - CS.longAcc) * Math.min(1, 10*h);
     CS.latAcc += (vF*yawRate - CS.latAcc) * Math.min(1, 10*h);
@@ -2253,6 +2261,146 @@
     toast('Back at the town square');
   };
 
+  // ---------------------------------------------------------------
+  // Traffic: CC0 Kenney cars that drive on the right around the
+  // roundabout and the four city ring roads. They keep a gap to the
+  // car ahead, brake for the player, and are solid — bumping one
+  // knocks you back (and stops them for a moment).
+  // ---------------------------------------------------------------
+  var TRAFFIC_MODELS = [
+    { id:'sedan',            url:'models/cars/sedan.glb',            length:4.6 },
+    { id:'van',              url:'models/cars/van.glb',              length:4.9 },
+    { id:'suv',              url:'models/cars/suv.glb',              length:4.7 },
+    { id:'delivery',         url:'models/cars/delivery.glb',         length:5.4 },
+    { id:'truck',            url:'models/cars/truck.glb',            length:5.6 },
+    { id:'taxi',             url:'models/cars/taxi.glb',             length:4.7 },
+    { id:'hatchback-sports', url:'models/cars/hatchback-sports.glb', length:4.1 }
+  ];
+  var traffic = [];
+  var LANE = ROAD_HALF / 2;   // centre of the right-hand lane
+
+  function spawnTraffic(loops){
+    var pending = TRAFFIC_MODELS.length;
+    TRAFFIC_MODELS.forEach(function(spec){
+      loadCarModel(spec, function(){ if (--pending === 0) build(); });
+    });
+    function build(){
+      var k = 0;
+      loops.forEach(function(road){
+        var count = 4;
+        for (var i=0;i<count;i++){
+          var spec = TRAFFIC_MODELS[k++ % TRAFFIC_MODELS.length];
+          var dir = i % 2 ? -1 : 1;
+          var c = {
+            road: road, dir: dir, lane: dir * LANE,
+            s: (i / count) * road.length + Math.random()*6,
+            v: 0, vmax: 8 + Math.random()*4, spin: 0, stopTimer: 0, hx: 0, hz: 1,
+            rig: buildCarRig(spec), group: new THREE.Group(), spec: spec
+          };
+          c.group.add(c.rig.body);
+          trafficPose(c);
+          // never spawn on top of the player
+          if (Math.hypot(c.group.position.x - car.position.x, c.group.position.z - car.position.z) < 18){
+            c.s = (c.s + 25) % road.length; trafficPose(c);
+          }
+          scene.add(c.group);
+          traffic.push(c);
+        }
+      });
+    }
+  }
+
+  function trafficPose(c){
+    var L = c.road.length;
+    c.s = ((c.s % L) + L) % L;
+    var f = frameAt(c.road, c.s);
+    c.hx = f.tangent.x * c.dir; c.hz = f.tangent.z * c.dir;
+    c.group.position.set(f.point.x + f.normal.x*c.lane, 0, f.point.z + f.normal.z*c.lane);
+    c.group.rotation.y = Math.atan2(c.hx, c.hz);
+  }
+
+  function updateTraffic(dt){
+    for (var i=0;i<traffic.length;i++){
+      var c = traffic[i], L = c.road.length, target = c.vmax;
+      // keep a gap to whoever is ahead in the same lane
+      for (var j=0;j<traffic.length;j++){
+        var o = traffic[j];
+        if (o === c || o.road !== c.road || o.dir !== c.dir) continue;
+        var gap = (((o.s - c.s) * c.dir) % L + L) % L;
+        if (gap < 22) target = Math.min(target, Math.max(0, (gap - 8) * 0.9));
+      }
+      // brake for the player if they're in front, in (roughly) our lane
+      var rx = car.position.x - c.group.position.x, rz = car.position.z - c.group.position.z;
+      var ahead = rx*c.hx + rz*c.hz, lat = Math.abs(rx*c.hz - rz*c.hx);
+      if (ahead > 0 && ahead < 18 && lat < 2.9) target = Math.min(target, Math.max(0, (ahead - 6.5) * 0.9));
+      if (c.stopTimer > 0){ c.stopTimer -= dt; target = 0; }
+      var accel = target > c.v ? 3 : 9;
+      var dv = target - c.v;
+      c.v += Math.sign(dv) * Math.min(Math.abs(dv), accel * dt);
+      c.s += c.dir * c.v * dt;
+      trafficPose(c);
+      c.spin += c.v * dt / c.rig.radius;
+      for (var w=0; w<c.rig.wheels.length; w++) c.rig.wheels[w].pivot.rotation.x = c.spin;
+      c.rig.lights.brake.color.setHex(target < c.v - 0.3 || c.v < 0.2 ? 0xff2020 : 0x4a0606);
+    }
+  }
+
+  // Player ↔ traffic collisions. Each car is approximated by three
+  // circles along its length; overlapping circles push the player out
+  // and cancel the velocity going into the other car.
+  var _pc = [[0,0],[0,0],[0,0]], _tc = [[0,0],[0,0],[0,0]];
+  function carCircles(out, x, z, hx, hz, len, hw){
+    var off = Math.max(0, len/2 - hw);
+    out[0][0] = x + hx*off; out[0][1] = z + hz*off;
+    out[1][0] = x;          out[1][1] = z;
+    out[2][0] = x - hx*off; out[2][1] = z - hz*off;
+  }
+  function collideTraffic(){
+    if (!traffic.length) return;
+    var th = car.rotation.y, phx = Math.sin(th), phz = Math.cos(th);
+    var pr = carRig.halfWidth * 1.02;
+    for (var i=0;i<traffic.length;i++){
+      var c = traffic[i], gx = c.group.position.x, gz = c.group.position.z;
+      var dxc = car.position.x - gx, dzc = car.position.z - gz;
+      if (dxc*dxc + dzc*dzc > 100) continue;
+      carCircles(_pc, car.position.x, car.position.z, phx, phz, carRig.spec.length, pr);
+      carCircles(_tc, gx, gz, c.hx, c.hz, c.spec.length, c.rig.halfWidth);
+      var tr = c.rig.halfWidth * 1.02;
+      for (var a=0;a<3;a++) for (var b=0;b<3;b++){
+        var dx = _pc[a][0] - _tc[b][0], dz = _pc[a][1] - _tc[b][1];
+        var d = Math.sqrt(dx*dx + dz*dz), min = pr + tr;
+        if (d >= min || d < 1e-4) continue;
+        var nx = dx/d, nz = dz/d, pen = min - d;
+        car.position.x += nx*pen; car.position.z += nz*pen;
+        _pc[0][0] += nx*pen; _pc[1][0] += nx*pen; _pc[2][0] += nx*pen;
+        _pc[0][1] += nz*pen; _pc[1][1] += nz*pen; _pc[2][1] += nz*pen;
+        // relative velocity (traffic moves along its heading)
+        var rvx = CS.vx - c.hx*c.v, rvz = CS.vz - c.hz*c.v;
+        var vn = rvx*nx + rvz*nz;
+        if (vn < 0){
+          CS.vx -= nx*vn*1.3; CS.vz -= nz*vn*1.3;
+          if (-vn > 2) { CS.impact = Math.max(CS.impact, -vn); playThud(-vn); }
+          c.stopTimer = 1.6;
+        }
+      }
+    }
+  }
+
+  var lastThud = 0;
+  function playThud(strength){
+    if (!AUD.ctx || !AUD.on) return;
+    var t = AUD.ctx.currentTime;
+    if (t - lastThud < 0.25) return;
+    lastThud = t;
+    var ctx = AUD.ctx, len = Math.floor(ctx.sampleRate * 0.25);
+    var buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0);
+    for (var i=0;i<len;i++) d[i] = (Math.random()*2 - 1) * Math.pow(1 - i/len, 3);
+    var src = ctx.createBufferSource(); src.buffer = buf;
+    var lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 420;
+    var g = ctx.createGain(); g.gain.value = Math.min(0.9, 0.15 + strength*0.06);
+    src.connect(lp); lp.connect(g); g.connect(AUD.master); src.start();
+  }
+
   var _camFwd = new THREE.Vector3();
   function updateCamera(dt){
     if (!isDragging){
@@ -2309,6 +2457,11 @@
       var lx = cx + s.cityCenter.x*k, lz = cy + s.cityCenter.z*k;
       mmCtx.fillText(String(sec.index + 1), lx, lz);
     });
+    mmCtx.fillStyle = 'rgba(230,230,240,0.7)';
+    for (var ti=0; ti<traffic.length; ti++){
+      var tp = traffic[ti].group.position;
+      mmCtx.fillRect(cx + tp.x*k - 2.5, cy + tp.z*k - 2.5, 5, 5);
+    }
     var px = cx + car.position.x*k;
     var pz = cy + car.position.z*k;
     mmCtx.save();
@@ -2325,8 +2478,9 @@
     requestAnimationFrame(tick);
     if (!running) return;
     try {
-      var dt = Math.min(clock.getDelta(), 0.05);
+      var dt = Math.min(clock.getDelta(), 0.1);
       var t = clock.elapsedTime;
+      updateTraffic(dt);
       updateCar(dt);
       updateNearestStation();
       updateLocation();
@@ -2353,8 +2507,9 @@
       scene: scene, camera: camera, renderer: renderer,
       get car(){ return car; },
       get state(){ return CS; },
+      get traffic(){ return traffic; },
       // advance the physics by `sec` seconds of simulated time
-      sim: function(sec){ for (var i=0, n=Math.round(sec/STEP); i<n; i++) physicsStep(STEP); updateGear(1); return { kmh: Math.abs(CS.vF)*3.6, gear: CS.gear, slip: CS.slip, x: car.position.x, z: car.position.z, yaw: car.rotation.y }; },
+      sim: function(sec){ for (var i=0, n=Math.round(sec/STEP); i<n; i++){ updateTraffic(STEP); physicsStep(STEP); } updateGear(1); return { kmh: Math.abs(CS.vF)*3.6, gear: CS.gear, slip: CS.slip, x: car.position.x, z: car.position.z, yaw: car.rotation.y }; },
       input: input,
       topDown: function(x, z, h){
         debugCam = true;
@@ -2621,6 +2776,7 @@
     camTarget = new THREE.Vector3();
     scene.add(car);
     placeCarAt(spawn.pt, spawn.next);
+    spawnTraffic([hubRoad].concat(CITY_DEFS.map(function(cd){ return cd.road; })));
 
     // ---- Touch controls ----
     function bindHold(id, onFlag){

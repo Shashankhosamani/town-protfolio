@@ -82,7 +82,7 @@ The old `portfolio-track-demo.html` URL redirects to `index.html`.
 ```
 index.html        app: intro, HUD, panels, page view, 3D world
 content.js        ← all portfolio copy (edit this)
-models/cars/                                    6 drivable Kenney cars (CC0) + shared texture
+models/cars/                                    Kenney cars (CC0): 6 drivable + 5 traffic-only, shared texture
 dodge_challenger_-_muscle_car_-_low-poly/       "Muscle car" option, loaded only if chosen
 australian_traffic_light__pedestrain_light/     traffic lights at junctions (used)
 road_modular/, city_scene/, neighbourhood_city_modular_lowpoly/, modular_bridge…/,
@@ -133,13 +133,19 @@ The physics runs in fixed **120 Hz steps**, so the car behaves the same at any f
 - **HUD**: shows real km/h, the gear (R/N/1–5 from simulated gear ratios) and an RPM bar.
 - **Sound**: a small WebAudio synth (detuned oscillators through a low-pass filter) follows RPM and throttle, with filtered noise for tyre squeal. It starts when you click *Start Engine*, and the on/off setting is remembered.
 
+- **Traffic**: 20 cars from the same CC0 kit drive on the right around the roundabout and the four city ring roads, at 30–45 km/h.
+  - They keep a gap to the car ahead (never closer than about 12 m bumper to bumper in testing).
+  - They brake to a stop behind you if you block their lane.
+  - They show brake lights and headlights.
+  - They're solid: each car is three circles along its length, so bumping one pushes you out and cancels the speed going into it, with a thud and a camera shake. The car you hit pauses for a moment. Traffic appears as white dots on the minimap.
+
 With `?debug` in the URL, `__town.sim(seconds)` advances the physics instantly, and `__town.input` / `__town.state` let you script or inspect a drive.
 
 ## Credits & licences
 
 These models are used under their Sketchfab licences. Credits also appear in the in-app page view under **Credits**.
 
-- **Car Kit** by [Kenney](https://kenney.nl/assets/car-kit): sports sedan, hot hatch, race car, police cruiser, taxi and luxury SUV. **CC0 (public domain)**: free for any use, no attribution required. See `models/cars/License.txt`.
+- **Car Kit** by [Kenney](https://kenney.nl/assets/car-kit): sports sedan, hot hatch, race car, police cruiser, taxi and luxury SUV, plus sedan, van, SUV, delivery van and truck for traffic. **CC0 (public domain)**: free for any use, no attribution required. See `models/cars/License.txt`.
 - "Dodge Challenger – Muscle Car – Low-Poly" by Allay Design, Sketchfab Standard
 - "Australian Traffic Light & Pedestrian Light" by JoTrain The Aussie, Sketchfab Standard
 
