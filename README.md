@@ -1,13 +1,13 @@
 # Portfolio Town
 
-An interactive 3D portfolio. Visitors drive a car out of a small town square at dusk, down one of four roads, into four cities. Each city is one section of the portfolio:
+An interactive 3D portfolio set in a small coastal town. Visitors start in the town square and drive to four districts. Each district is one section of the portfolio:
 
-| Key | City         | Direction | Colour |
-|-----|--------------|-----------|--------|
-| `1` | Projects     | east      | blue   |
-| `2` | Skills       | north     | amber  |
-| `3` | Experience   | south     | pink   |
-| `4` | Contact      | west      | violet |
+| Key | District | Where | Colour |
+|-----|----------|-------|--------|
+| `1` | Projects | west, along Market Street (glass towers) | blue |
+| `2` | Skills | east, along Market Street (the market) | amber |
+| `3` | Experience | south, up Main Street toward the hills | pink |
+| `4` | Contact | the island, across Harbour Bridge (lighthouse) | violet |
 
 Every project, job, skill group and contact method stands on its own billboard; pull up to one and press **E** to read it. If someone doesn't want to drive, **Read as a page** (or **L**) shows everything as an ordinary page, which also works on devices without WebGL.
 
@@ -61,7 +61,7 @@ Then open <http://localhost:3000>.
 | **Hide a whole section** | Empty its list (`"items": []`) or delete the section. Its city stays, without billboards. |
 | **Hide one field** | Set it to `""` or delete it. Empty fields simply don't show. |
 
-There's **no limit** on items. Billboards are spread along each city's avenue (7 fit), and any extra continue around that city's ring road.
+There's practically **no limit** on items. Billboards fill each district's main street first, then continue on its cross streets (30 projects all get a billboard). Anything beyond that still appears in the panels and page view.
 
 ### Editing tips
 
@@ -140,38 +140,43 @@ The engine is plain JavaScript and doesn't depend on React. `TownApp` renders th
 ### How visitors see your portfolio
 
 - **Landing card**: the first screen is a summary of you over a live flyover of the town: name, role, tagline, up to 4 `highlights`, top skills (from `topSkills`, or picked automatically from your skill groups), and buttons for every contact link with a real URL plus `resumeUrl`. A recruiter gets the essentials without driving. From there it's **Drive the town** or **Read as a page**.
-- **Billboards**: every portfolio item stands in the world. Each city's avenue is lined with lit billboards, one per project, job, skill group or contact method (up to 8 per city), so the portfolio can be read just by driving past. Pull up to one and press **E** to open the section scrolled to that exact item, which is highlighted. The shop at the end of each avenue opens the whole section.
+- **Billboards**: every portfolio item stands in the world. Each district's main street is lined with lit billboards, one per project, job, skill group or contact method, so the portfolio can be read just by driving past. Pull up to one and press **E** to open the section scrolled to that exact item, which is highlighted. The shop at the end of each district's street opens the whole section.
 - **Fast travel, page view and deep links** work as before (`1`–`4`, `L`, `#projects`, `#list`).
 
 ### How the world is built (`initWorld` in `lib/town/engine.js`)
 
 ```
-                     [ SKILLS ]            north
-                         |
-  [ CONTACT ] —— ( town square ) —— [ PROJECTS ]
-                         |
-                  [ EXPERIENCE ]           south
+              ~~~~~~~~~~~~~~~ SEA ~~~~~~~~~~~~~~~
+                  ( ISLAND · Contact )  lighthouse
+                          ║  Harbour Bridge
+   ═══════════════ Waterfront Boulevard ════════════════
+   ║           ║             │             ║            ║
+   ║  PROJECTS ╬══ Market St ◯ Market St ══╬  SKILLS    ║
+   ║   (west)  ║        town square        ║   (east)   ║
+   ╠═══════════╬═══ Hill Rd ═╬═════════════╬════════════╣
+   ║           ║  EXPERIENCE (Main Street) ║            ║
+   ╚═══════════╩═════════════╩═════════════╩════════════╝
+                    hills in the distance
 ```
 
-- **Layout**: the town square is a roundabout (`HUB_RADIUS`) with a park and fountain in the middle. A straight spoke leaves it in each direction for `CITY_DIST` metres. Each city is a rounded-rectangle ring road (`CITY_W` × `CITY_H`, corner radius `CITY_CORNER`) with an avenue straight through the middle. The spoke meets the ring at a crossroads with the avenue, and the city's shop sits at the far end of the avenue.
-- **Street cross-section**: there are two lanes (`ROAD_HALF` each side of centre), a raised curb (`CURB_W` × `CURB_H`) and a tiled sidewalk (`SIDEWALK_W`). Every road is a centre-line resampled to about 1 point per metre. Asphalt, curbs, sidewalks and walls are generated from it and batched into one mesh per material.
-- **Junctions**: no junction is placed by hand. On each road, any stretch of curb, sidewalk or edge line that would land on *another* road's asphalt is removed. The exact cut point is found by bisection, so curbs meet in clean L-shaped corners. Crosswalks and stop lines are added automatically where an open road meets another road.
+North is −z and east is +x.
+
+- **Layout**:
+  - A ring road encloses the town. Its north side is the curving **Waterfront Boulevard** along a stone seawall.
+  - Inside it, a street grid: **Market Street** east–west through the **town square** roundabout, **Main Street** north–south, plus **West Avenue**, **East Avenue** and **Hill Road**.
+  - Main Street continues north over **Harbour Bridge**, which has piers, railings and portal towers, to the **island**. The island has its own loop road and a lighthouse with a rotating beam at night.
+  - Low hills sit behind the town and across the bay, and boats circle in the harbour.
+  - Each district's shop sits where its main street meets the ring road, or at the far side of the island loop.
+- **Street cross-section**: there are two lanes (`ROAD_HALF` each side of centre), a raised curb (`CURB_W` × `CURB_H`) and a tiled sidewalk (`SIDEWALK_W`). Every street is a centre-line resampled to about 1 point per metre, split at every junction. Asphalt, curbs, sidewalks and walls are generated from it and batched into one mesh per material.
+- **Junctions**: no junction is placed by hand. On each street, any stretch of curb, sidewalk or edge line that would land on *another* street's asphalt is removed. The exact cut point is found by bisection, so curbs meet in clean L-shaped corners. Crosswalks and stop lines are added automatically where a street ends at another.
+- **Land and sea**: `isLand(x, z)` decides what's ground. Buildings, billboards and trees are only placed on land, so nothing ends up in the water. The coast's shape and position are set by `BOULEVARD_Z`, `SHORE_Z`, `ISLAND_C`, `PLAZA_C` and friends at the top of the coast section.
 - **Textures**: asphalt and paving are canvas-generated and use world-space UVs, so overlapping pieces at junctions line up seamlessly.
-- **Street lights**: these are procedural poles with a glowing head and an additive light pool on the road, rather than real lights. That keeps the frame rate up, because about 150 real point lights would make the shaders very slow.
-- **Buildings**: buildings are procedural, in four styles:
-  - **Brick walk-ups**: brick courses, framed windows with sills and lintels, and sometimes a rooftop water tank.
-  - **Plaster townhouses**: shuttered windows, tinted with each area's palette.
-  - **Concrete offices**: ribbon windows over spandrel panels.
-  - **Glass towers**: curtain-wall glass, often with a setback crown.
-
-  Buildings can have ground-floor shops with lit windows, a door, an awning and a glowing sign. They also get a string course, cornice, parapet and rooftop AC units or stair housings. Window textures tile in units of bays (3 m) and floors (3.2 m), so windows stay the right size on any building. Lit windows are randomised, and office lights fade toward the floor with desk silhouettes.
-
-  Each area has its own mix of styles: plaster and brick around the town square and along the spokes, offices and glass towers on each city's avenue, and a mix on the city ring roads. Every building of a material is merged into one mesh, so the whole town is about 20 draw calls.
-
-  A building is only placed if all four corners of its footprint clear every sidewalk and other buildings. If the first size doesn't fit, smaller footprints are tried before the spot is skipped.
+- **Street lights**: these are procedural poles with a glowing head and an additive light pool on the road, rather than real lights. That keeps the frame rate up.
+- **Buildings**: buildings line every street, and the back lots inside each block are filled too, so the town reads as dense. Each district has its own mix of styles: glass and office towers for Projects, brick and plaster for the Skills market, and offices and brick for Experience. A building is only placed if all four corners of its footprint clear every sidewalk, other buildings and the shoreline.
+- **Billboards**: items go along the district's main street, first zig-zagging along one side, then the other side. If there are still more, they continue on the district's cross streets. A test with 30 projects placed all 30.
 - **Collision**: the car stays on the union of all road surfaces, with its distance from the nearest centre-line limited so the wheels stay off the curb. Hitting the curb removes the part of the velocity going into it, so the car glances off and slides along. A hard hit shakes the camera.
-- **Shops & billboards**: a shop opens its section when the car is within 13 m; a billboard opens its item within 12.5 m (the nearest one wins).
-- **Debug view**: add `?debug` to the URL, then use `__town.topDown(x, z, height)` in the console for a bird's-eye view of any area. `__town.follow()` returns to the chase camera.
+- **Location readout**: the HUD shows the street name and the district, for example "Market Street · Projects district".
+- **Debug view**: add `?debug` to the URL, then use `__town.topDown(x, z, height)` in the console for a bird's-eye view. `__town.follow()` returns to the chase camera.
 
 ### Day and night (`applySky` in `lib/town/engine.js`)
 
@@ -200,7 +205,7 @@ The physics runs in fixed **120 Hz steps**, so the car behaves the same at any f
 - **HUD**: shows real km/h, the gear (R/N/1–5 from simulated gear ratios) and an RPM bar.
 - **Sound**: a small WebAudio synth (detuned oscillators through a low-pass filter) follows RPM and throttle, with filtered noise for tyre squeal. It starts when you click *Start Engine*, and the on/off setting is remembered.
 
-- **Traffic**: 20 cars from the same CC0 kit drive on the right around the roundabout and the four city ring roads, at 30–45 km/h.
+- **Traffic**: Cars from the same CC0 kit drive on the right around the ring road, the town square and the island loop, at 30–45 km/h. The number of cars scales with road length (about 15 in total).
   - They keep a gap to the car ahead (never closer than about 12 m bumper to bumper in testing).
   - They brake to a stop behind you if you block their lane.
   - They show brake lights and headlights.

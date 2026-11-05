@@ -52,10 +52,10 @@ export default function TownApp() {
           <button className="btn" id="intro-list-btn">Read as a page</button>
         </div>
         <div className="city-legend">
-          <span><i style={{ background: 'var(--blue)' }}></i>Projects · east</span>
-          <span><i style={{ background: 'var(--amber)' }}></i>Skills · north</span>
-          <span><i style={{ background: 'var(--pink)' }}></i>Experience · south</span>
-          <span><i style={{ background: 'var(--violet)' }}></i>Contact · west</span>
+          <span><i style={{ background: 'var(--blue)' }}></i>Projects · west</span>
+          <span><i style={{ background: 'var(--amber)' }}></i>Skills · east</span>
+          <span><i style={{ background: 'var(--pink)' }}></i>Experience · hillside</span>
+          <span><i style={{ background: 'var(--violet)' }}></i>Contact · island</span>
         </div>
         <div className="car-pick" id="car-pick">
           Your car
