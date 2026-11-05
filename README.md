@@ -199,7 +199,22 @@ The physics runs in fixed **120 Hz steps**, so the car behaves the same at any f
 
 - **Cars**: there are seven, defined in `CARS`. Each one has its own top speed, acceleration, braking, tyre grip and steering lock. The Kenney models have separate wheel nodes, so each wheel is placed on a pivot at its hub, where it spins with distance travelled and the front wheels turn with the steering.
 - **Engine**: force tapers off toward top speed. Rolling resistance and aerodynamic drag slow the car when you lift off. Braking stops the car without reversing; keep holding `S` once stopped to reverse.
-- **Steering**: this uses a bicycle model, where turn rate = speed × tan(steering angle) ÷ wheelbase. The car can't turn on the spot, and there's less steering lock at speed. Turn rate is also capped by tyre grip (about 0.9 g for the sedan). Steering too hard at speed makes the car **understeer** wide instead of turning impossibly tight.
+- **Steering**: this uses a bicycle model, where turn rate = speed × tan(steering angle) ÷ wheelbase, tuned for an arcade feel. It's all in the `STEER` table at the top of the physics section.
+  - The wheel turns in fast and self-centres faster.
+  - Steering lock fades gently with speed.
+  - A low-speed assist lets the car nose round a corner at walking pace, but it never turns on the spot.
+  - The tyre-grip limit is about 1.75 g for the sedan. Steer too hard at speed and the car runs wide (understeer).
+  - Hard cornering scrubs off a little speed.
+  - Measured at full lock, sports sedan:
+
+    | Speed | Turning circle radius | Time to turn 90° |
+    |---|---|---|
+    | 20 km/h | 3.6 m | 1.15 s |
+    | 30 km/h | 3.9 m | 0.9 s |
+    | 45 km/h | 9 m | 1.1 s |
+    | 80 km/h | 28 m | 2 s |
+
+    A 90° turn at a town junction works cleanly at 20–50 km/h.
 - **Drift**: velocity is tracked separately from heading, and grip bleeds off sideways slide. The handbrake drops grip and lets the rear step out.
 - **Feel**: the body pitches under braking and acceleration and rolls in corners, and there are brake and reverse lights. The chase camera pulls back and widens with speed and looks ahead.
 - **HUD**: shows real km/h, the gear (R/N/1–5 from simulated gear ratios) and an RPM bar.
