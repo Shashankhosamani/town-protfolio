@@ -9,27 +9,37 @@ An interactive 3D portfolio. Visitors drive a car out of a small town square at 
 | `3` | Experience   | south     | pink   |
 | `4` | Contact      | west      | violet |
 
-Pull up to a city's glowing shop and press **E** to open that section. If someone doesn't want to drive, **"Skip the drive — read as a page"** (or **L**) shows all the content as an ordinary page. That page also works on devices without WebGL.
+Every project, job, skill group and contact method stands on its own billboard; pull up to one and press **E** to read it. If someone doesn't want to drive, **Read as a page** (or **L**) shows everything as an ordinary page, which also works on devices without WebGL.
 
-Built with plain HTML/JS and [three.js](https://threejs.org) r128. No build step.
+Built with [Next.js](https://nextjs.org) (static export) and [three.js](https://threejs.org) r128.
 
 ---
 
 ## Run it locally
 
-Browsers block 3D model files on `file://` pages, so serve the folder over HTTP:
+You need [Node.js](https://nodejs.org) 20 or newer.
 
 ```bash
-python3 -m http.server 8000
+npm install
 ```
 
-Then open <http://localhost:8000>.
+```bash
+npm run dev
+```
 
-If you do open `index.html` straight from disk, it still works, but it uses a simple procedural car and skips the traffic lights, and it shows a notice saying so. The roads are generated in code either way.
+Then open <http://localhost:3000>.
+
+| Command | What it does |
+|---|---|
+| `npm run dev` | Development server with hot reload. Saving `public/portfolio.json` also reloads the page. |
+| `npm run build` | Checks `portfolio.json` against its schema, then writes the finished static site to `out/` |
+| `npm start` | Serves the built `out/` folder locally, to preview exactly what gets deployed |
+| `npm run validate-content` | Only checks `portfolio.json`, and counts the TODO placeholders left |
+| `npm run typecheck` | TypeScript check |
 
 ## Edit your content
 
-**All content lives in [`portfolio.json`](portfolio.json).** It's plain data. You never touch `index.html` to update the portfolio, and everything follows the file: the landing card, the section panels, the page view and the billboards in the 3D town.
+**All content lives in [`public/portfolio.json`](public/portfolio.json).** It's plain data. You never touch code to update the portfolio, and everything follows the file: the landing card, the section panels, the page view and the billboards in the 3D town.
 
 ```jsonc
 {
@@ -55,8 +65,9 @@ There's **no limit** on items. Billboards are spread along each city's avenue (7
 
 ### Editing tips
 
-- **Autocomplete and checking**: `portfolio.json` points at [`portfolio.schema.json`](portfolio.schema.json). VS Code and most editors use it to suggest field names, show descriptions on hover, and underline mistakes such as a misspelt `"nmae"` or a list where text should be.
-- **Live preview**: run `python3 -m http.server 8000` and open <http://localhost:8000>. While it's open on `localhost`, **saving `portfolio.json` reloads the page automatically**.
+- **Autocomplete and checking**: `portfolio.json` points at [`public/portfolio.schema.json`](public/portfolio.schema.json). VS Code and most editors use it to suggest field names, show descriptions on hover, and underline mistakes such as a misspelt `"nmae"` or a list where text should be.
+- **Live preview**: with `npm run dev` running, **saving `portfolio.json` reloads the page automatically**.
+- **Checked on every build**: `npm run build` (and the deploy workflow) refuses to publish a `portfolio.json` that doesn't match the schema, and prints exactly what's wrong.
 - **Mistakes are explained, not silent**:
   - **Syntax errors**: a typo such as a missing or extra comma shows a red bar on the page naming the line and column, plus the usual causes.
   - **Wrong data**: an item of the wrong type, or one missing its name, is skipped, and the browser console lists what to fix. The rest of the site keeps working.
@@ -84,31 +95,47 @@ There's **no limit** on items. Billboards are spread along each city's avenue (7
 
 ## Deep links
 
-- `index.html#projects` (also `#skills`, `#experience`, `#contact`): after **Start Engine**, drops the car at that city and opens the section.
-- `index.html#list`: opens the page view right away. Good for a résumé link.
+- `/#projects` (also `#skills`, `#experience`, `#contact`): after **Drive the town**, drops the car at that city and opens the section.
+- `/#list`: opens the page view right away. Good for a résumé link.
 
 ## Deploy (GitHub Pages)
 
-1. Push to GitHub.
-2. Go to **Settings → Pages → Build and deployment**, choose **Deploy from a branch**, then select the branch and `/ (root)`.
-3. The site goes live at `https://<user>.github.io/town-protfolio/`.
+The site deploys automatically with GitHub Actions ([`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)).
 
-The old `portfolio-track-demo.html` URL redirects to `index.html`.
+1. **One-time setup**: on GitHub, go to **Settings → Pages → Build and deployment → Source** and choose **GitHub Actions**. "Deploy from a branch" no longer works, because the site is now built.
+2. Every push to `main` then does the following:
+   1. Checks the content.
+   2. Type-checks the code.
+   3. Builds the static site with the `/town-protfolio` base path.
+   4. Publishes it to `https://<user>.github.io/town-protfolio/`.
+3. Pull requests run the same checks and build without deploying, so mistakes show up before merging.
+
+The workflow only checks out the folders the site needs, skipping the large unused model folders. The output is a plain static site, so any static host (Netlify, Vercel, Cloudflare Pages, S3) can serve the `out/` folder too.
+
+The old `portfolio-track-demo.html` URL redirects to the home page.
 
 ## Project layout
 
 ```
-index.html        app: intro, HUD, panels, page view, 3D world
-portfolio.json    ← all portfolio content (edit this)
-portfolio.schema.json   field descriptions + validation for editors
-models/cars/                                    Kenney cars (CC0): 6 drivable + 5 traffic-only, shared texture
-dodge_challenger_-_muscle_car_-_low-poly/       "Muscle car" option, loaded only if chosen
-australian_traffic_light__pedestrain_light/     traffic lights at junctions (used)
+app/                    Next.js App Router: layout.tsx (metadata, fonts), page.tsx, globals.css
+components/TownApp.tsx  the page markup; boots the engine once on the client
+lib/town/engine.js      the engine: 3D world, driving, traffic, sky, panels (framework-agnostic JS)
+public/
+  portfolio.json        ← all portfolio content (edit this)
+  portfolio.schema.json   field descriptions + validation for editors and the build
+  models/cars/          Kenney cars (CC0): 6 drivable + 5 traffic-only, shared texture
+  models/muscle-car/    "Muscle car" option, loaded only if chosen
+  models/traffic-light/ traffic lights at the town-square exits
+scripts/validate-content.mjs   schema check run before every build
+.github/workflows/deploy.yml   build + deploy to GitHub Pages
+next.config.mjs         static export, base path for Pages
+
+dodge_challenger_…/, australian_traffic_light_…/   original high-res sources of the two models above
 road_modular/, city_scene/, neighbourhood_city_modular_lowpoly/, modular_bridge…/,
-1998_ducati_748/, 2018_bmw_r_ninet_pure/, ford_*/                          (not used)
+1998_ducati_748/, 2018_bmw_r_ninet_pure/, ford_*/  unused source models (not part of the site)
 ```
 
-The page loads only the `scene.web.gltf` files, which use small textures from `textures_web/`. Each model loads in the background while the intro screen shows. If a model fails, the page falls back to procedural geometry.
+The engine is plain JavaScript and doesn't depend on React. `TownApp` renders the markup once, then calls `bootTown(THREE)`. The engine finds elements by id and drives them directly, and three.js comes from npm (`three@0.128.0`), so there's no CDN to go down. Models load in the background while the landing card shows; if one fails, the engine falls back to procedural geometry.
 
 ### How visitors see your portfolio
 
@@ -116,7 +143,7 @@ The page loads only the `scene.web.gltf` files, which use small textures from `t
 - **Billboards**: every portfolio item stands in the world. Each city's avenue is lined with lit billboards, one per project, job, skill group or contact method (up to 8 per city), so the portfolio can be read just by driving past. Pull up to one and press **E** to open the section scrolled to that exact item, which is highlighted. The shop at the end of each avenue opens the whole section.
 - **Fast travel, page view and deep links** work as before (`1`–`4`, `L`, `#projects`, `#list`).
 
-### How the world is built (`initWorld` in `index.html`)
+### How the world is built (`initWorld` in `lib/town/engine.js`)
 
 ```
                      [ SKILLS ]            north
@@ -146,7 +173,7 @@ The page loads only the `scene.web.gltf` files, which use small textures from `t
 - **Shops & billboards**: a shop opens its section when the car is within 13 m; a billboard opens its item within 12.5 m (the nearest one wins).
 - **Debug view**: add `?debug` to the URL, then use `__town.topDown(x, z, height)` in the console for a bird's-eye view of any area. `__town.follow()` returns to the chase camera.
 
-### Day and night (`applySky` in `index.html`)
+### Day and night (`applySky` in `lib/town/engine.js`)
 
 The sky follows **the visitor's real local time**. Someone in London at 4:30 pm in November sees the sunset, someone in India at 10 pm sees a starry night, and someone in California at 8 am sees morning.
 
@@ -161,7 +188,7 @@ The sky follows **the visitor's real local time**. Someone in London at 4:30 pm 
 - **Override**: **T** or the ☀ button cycles *Real time → Day → Sunset → Night*. The choice is remembered.
 - **Debug**: with `?debug`, `__town.sky(elevation, azimuth)` forces any sun position, and `__town.solar(isoDate, lat, lon)` exposes the formula.
 
-### How the driving works (`physicsStep` / `updateCar` in `index.html`)
+### How the driving works (`physicsStep` / `updateCar` in `lib/town/engine.js`)
 
 The physics runs in fixed **120 Hz steps**, so the car behaves the same at any frame rate. One unit is one metre.
 
@@ -183,9 +210,9 @@ With `?debug` in the URL, `__town.sim(seconds)` advances the physics instantly, 
 
 ## Credits & licences
 
-These models are used under their Sketchfab licences. Credits also appear in the in-app page view under **Credits**.
+These models are used under their licences. Credits also appear in the in-app page view under **Credits**.
 
-- **Car Kit** by [Kenney](https://kenney.nl/assets/car-kit): sports sedan, hot hatch, race car, police cruiser, taxi and luxury SUV, plus sedan, van, SUV, delivery van and truck for traffic. **CC0 (public domain)**: free for any use, no attribution required. See `models/cars/License.txt`.
+- **Car Kit** by [Kenney](https://kenney.nl/assets/car-kit): sports sedan, hot hatch, race car, police cruiser, taxi and luxury SUV, plus sedan, van, SUV, delivery van and truck for traffic. **CC0 (public domain)**: free for any use, no attribution required. See `public/models/cars/License.txt`.
 - "Dodge Challenger – Muscle Car – Low-Poly" by Allay Design, Sketchfab Standard
 - "Australian Traffic Light & Pedestrian Light" by JoTrain The Aussie, Sketchfab Standard
 
