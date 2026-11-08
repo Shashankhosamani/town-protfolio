@@ -1,8 +1,0 @@
-Model Information:
-* title:	City Scene
-* source:	https://sketchfab.com/3d-models/city-scene-c00b3b8c71594890a2a3c46c20a30b5c
-* author:	golukumar (https://sketchfab.com/mortalityrexotable)
-
-Model License:
-* license type:	SKETCHFAB Standard (https://sketchfab.com/licenses)
-* requirements:	Under basic restrictions, use worldwide, on all types of media, commercially or not, and in all types of derivative works

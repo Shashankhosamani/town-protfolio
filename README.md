@@ -129,10 +129,6 @@ public/
 scripts/validate-content.mjs   schema check run before every build
 .github/workflows/deploy.yml   build + deploy to GitHub Pages
 next.config.mjs         static export, base path for Pages
-
-dodge_challenger_…/, australian_traffic_light_…/   original high-res sources of the two models above
-road_modular/, city_scene/, neighbourhood_city_modular_lowpoly/, modular_bridge…/,
-1998_ducati_748/, 2018_bmw_r_ninet_pure/, ford_*/  unused source models (not part of the site)
 ```
 
 The engine is plain JavaScript and doesn't depend on React. `TownApp` renders the markup once, then calls `bootTown(THREE)`. The engine finds elements by id and drives them directly, and three.js comes from npm (`three@0.128.0`), so there's no CDN to go down. Models load in the background while the landing card shows; if one fails, the engine falls back to procedural geometry.
